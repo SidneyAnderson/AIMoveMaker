@@ -81,13 +81,14 @@ async def create_snapshot(
         kf_result = await db.execute(
             select(Keyframe)
             .where(Keyframe.storyboard_id == storyboard.id)
-            .order_by(Keyframe.order_index)
+            .order_by(Keyframe.index)
         )
         for kf in kf_result.scalars().all():
             keyframes_data.append(_row_to_dict(kf, [
-                "id", "storyboard_id", "order_index", "prompt", "negative_prompt",
-                "seed", "seed_mode", "model_id", "scheduler", "steps", "cfg_scale",
-                "width", "height", "generation_params", "thumbnail_asset_id",
+                "id", "storyboard_id", "index", "positive_prompt", "negative_prompt",
+                "neg_prompt_scope", "mode", "seed", "seed_mode", "model_id",
+                "variation_count", "cn_enabled", "cn_type", "cn_strength",
+                "cn_start_pct", "cn_end_pct", "selected_asset_id",
             ]))
 
     # 2. Timeline + tracks + clips
@@ -101,30 +102,36 @@ async def create_snapshot(
     audio_clips_data = []
     if timeline:
         tr_result = await db.execute(
-            select(Track).where(Track.timeline_id == timeline.id).order_by(Track.order_index)
+            select(Track).where(Track.timeline_id == timeline.id).order_by(Track.order)
         )
         for tr in tr_result.scalars().all():
             tracks_data.append(_row_to_dict(tr, [
-                "id", "timeline_id", "name", "type", "order_index", "is_locked", "is_visible",
+                "id", "timeline_id", "name", "type", "order", "locked", "visible", "muted",
             ]))
 
-        vc_result = await db.execute(
-            select(VideoClip).where(VideoClip.timeline_id == timeline.id)
-        )
-        for vc in vc_result.scalars().all():
-            video_clips_data.append(_row_to_dict(vc, [
-                "id", "timeline_id", "track_id", "source_asset_id",
-                "start_frame", "end_frame", "generation_params",
-            ]))
+        # Collect track IDs to query clips
+        track_ids = [t["id"] for t in tracks_data]
 
-        ac_result = await db.execute(
-            select(AudioClip).where(AudioClip.timeline_id == timeline.id)
-        )
-        for ac in ac_result.scalars().all():
-            audio_clips_data.append(_row_to_dict(ac, [
-                "id", "timeline_id", "track_id", "source_asset_id",
-                "start_frame", "end_frame", "volume", "fade_in_ms", "fade_out_ms",
-            ]))
+        if track_ids:
+            vc_result = await db.execute(
+                select(VideoClip).where(VideoClip.track_id.in_(track_ids))
+            )
+            for vc in vc_result.scalars().all():
+                video_clips_data.append(_row_to_dict(vc, [
+                    "id", "track_id", "start_ms", "end_ms", "order",
+                    "source_asset_id", "output_asset_id", "render_state",
+                    "mode", "positive_prompt", "negative_prompt", "seed",
+                ]))
+
+            ac_result = await db.execute(
+                select(AudioClip).where(AudioClip.track_id.in_(track_ids))
+            )
+            for ac in ac_result.scalars().all():
+                audio_clips_data.append(_row_to_dict(ac, [
+                    "id", "track_id", "start_ms", "end_ms", "order",
+                    "output_asset_id", "render_state", "subtype", "prompt",
+                    "volume", "fade_in_ms", "fade_out_ms",
+                ]))
 
     snapshot_data = {
         "project_id": project_id,

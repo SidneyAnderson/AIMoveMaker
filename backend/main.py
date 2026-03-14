@@ -110,11 +110,14 @@ def create_app() -> FastAPI:
     project_root = Path(__file__).resolve().parent.parent
     dist_dir = project_root / "frontend" / "dist"
     if dist_dir.is_dir():
-        from fastapi.responses import FileResponse
+        from fastapi.responses import FileResponse, JSONResponse
 
         # Catch-all for SPA — serves index.html for any non-API route
-        @app.get("/{full_path:path}")
+        @app.get("/{full_path:path}", include_in_schema=False)
         async def serve_spa(full_path: str):
+            # Never intercept API or docs routes — let them 404 naturally
+            if full_path.startswith("api/") or full_path in ("openapi.json",):
+                return JSONResponse({"detail": "Not Found"}, status_code=404)
             file_path = dist_dir / full_path
             if full_path and file_path.is_file():
                 return FileResponse(file_path)
