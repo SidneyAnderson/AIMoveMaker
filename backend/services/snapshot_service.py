@@ -140,7 +140,7 @@ async def create_snapshot(
         "storyboard_id": storyboard.id if storyboard else None,
         "keyframes": keyframes_data,
         "timeline_id": timeline.id if timeline else None,
-        "timeline_duration_frames": timeline.duration_frames if timeline else 0,
+        "timeline_duration_ms": timeline.duration_ms if timeline else 0,
         "tracks": tracks_data,
         "video_clips": video_clips_data,
         "audio_clips": audio_clips_data,
@@ -217,7 +217,7 @@ async def restore_snapshot(db: AsyncSession, snapshot_id: str) -> None:
         )
         tl = tl_result.scalar_one_or_none()
         if tl:
-            tl.duration_frames = data.get("timeline_duration_frames", 0)
+            tl.duration_ms = data.get("timeline_duration_ms", 0)
 
         # Re-create tracks
         for tr_data in data.get("tracks", []):

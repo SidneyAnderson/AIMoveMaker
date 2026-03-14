@@ -69,6 +69,8 @@ async def create_keyframe(
 
     # Determine index — append to end or insert after
     insert_after = data.pop("insert_after", None)
+    data.pop("order_index", None)   # schema alias, not a model column
+    data.pop("prompt", None)        # schema alias for positive_prompt
     result = await db.execute(
         select(func.max(Keyframe.index)).where(
             Keyframe.storyboard_id == storyboard.id
