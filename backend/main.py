@@ -1,7 +1,10 @@
+import os
 from contextlib import asynccontextmanager
+from pathlib import Path
 
-from fastapi import FastAPI
+from fastapi import APIRouter, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.staticfiles import StaticFiles
 
 from backend.config import get_settings
 
@@ -48,7 +51,11 @@ def create_app() -> FastAPI:
         allow_headers=["*"],
     )
 
-    # Register routers
+    # ── API sub-router under /api prefix ────────────────────────────────
+    # All REST and WebSocket endpoints are served under /api/* so the
+    # frontend (served at /) never collides with API paths.
+    api = APIRouter(prefix="/api")
+
     from backend.routers import (
         assets,
         audio_clips,
@@ -73,27 +80,45 @@ def create_app() -> FastAPI:
         websockets,
     )
 
-    app.include_router(auth.router)
-    app.include_router(oauth.router)
-    app.include_router(invites.router)
-    app.include_router(users.router)
-    app.include_router(projects.router)
-    app.include_router(storyboard.router)
-    app.include_router(keyframes.router)
-    app.include_router(timeline.router)
-    app.include_router(tracks.router)
-    app.include_router(video_clips.router)
-    app.include_router(audio_clips.router)
-    app.include_router(assets.router)
-    app.include_router(jobs.router)
-    app.include_router(batches.router)
-    app.include_router(model_registry.router)
-    app.include_router(lora_registry.router)
-    app.include_router(integrations.router)
-    app.include_router(settings.router)
-    app.include_router(snapshots.router)
-    app.include_router(notifications.router)
-    app.include_router(websockets.router)
+    api.include_router(auth.router)
+    api.include_router(oauth.router)
+    api.include_router(invites.router)
+    api.include_router(users.router)
+    api.include_router(projects.router)
+    api.include_router(storyboard.router)
+    api.include_router(keyframes.router)
+    api.include_router(timeline.router)
+    api.include_router(tracks.router)
+    api.include_router(video_clips.router)
+    api.include_router(audio_clips.router)
+    api.include_router(assets.router)
+    api.include_router(jobs.router)
+    api.include_router(batches.router)
+    api.include_router(model_registry.router)
+    api.include_router(lora_registry.router)
+    api.include_router(integrations.router)
+    api.include_router(settings.router)
+    api.include_router(snapshots.router)
+    api.include_router(notifications.router)
+    api.include_router(websockets.router)
+
+    app.include_router(api)
+
+    # ── Static file serving (production) ────────────────────────────────
+    # Serve the built frontend from frontend/dist/ when available.
+    # In development, Vite dev server handles this instead.
+    project_root = Path(__file__).resolve().parent.parent
+    dist_dir = project_root / "frontend" / "dist"
+    if dist_dir.is_dir():
+        from fastapi.responses import FileResponse
+
+        # Catch-all for SPA — serves index.html for any non-API route
+        @app.get("/{full_path:path}")
+        async def serve_spa(full_path: str):
+            file_path = dist_dir / full_path
+            if full_path and file_path.is_file():
+                return FileResponse(file_path)
+            return FileResponse(dist_dir / "index.html")
 
     return app
 

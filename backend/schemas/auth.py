@@ -3,7 +3,7 @@ from pydantic import BaseModel, EmailStr
 
 
 class LoginRequest(BaseModel):
-    email: EmailStr
+    email: str  # str instead of EmailStr to allow admin@localhost in dev
     password: str
 
 

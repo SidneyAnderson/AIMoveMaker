@@ -16,7 +16,9 @@ export function useWebSocket({ url, onMessage, enabled = true }: UseWebSocketOpt
     if (!enabled) return
 
     const token = useAuthStore.getState().accessToken || ''
-    const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}${url}${url.includes('?') ? '&' : '?'}token=${token}`
+    // Prepend /api if the URL doesn't already include it (WebSocket routes live under /api/)
+    const wsPath = url.startsWith('/api') ? url : `/api${url}`
+    const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}${wsPath}${wsPath.includes('?') ? '&' : '?'}token=${token}`
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
 
