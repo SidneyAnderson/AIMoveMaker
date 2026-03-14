@@ -19,7 +19,8 @@ logs/
 # AI Models (large binaries — top-level only)
 /models/
 
-# Outputs & Snapshots
+# Storage, Outputs & Snapshots
+storage/
 outputs/
 snapshots/
 

@@ -12,7 +12,7 @@ export default function ProjectsView() {
   const user = useAuthStore((s) => s.user)
   const isAdmin = user?.global_role === 'admin'
   const [showCreate, setShowCreate] = useState(false)
-  const [name, setName] = useState('')
+  const [title, setTitle] = useState('')
   const [description, setDescription] = useState('')
 
   const { data, isLoading } = useQuery({
@@ -21,11 +21,11 @@ export default function ProjectsView() {
   })
 
   const createMutation = useMutation({
-    mutationFn: (data: { name: string; description?: string }) => createProject(data),
+    mutationFn: (data: { title: string; description?: string }) => createProject(data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['projects'] })
       setShowCreate(false)
-      setName('')
+      setTitle('')
       setDescription('')
       toast.success('Project created')
     },
@@ -46,14 +46,12 @@ export default function ProjectsView() {
     <div className="p-6">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-lg font-semibold text-text-primary">Projects</h1>
-        {isAdmin && (
-          <button
-            onClick={() => setShowCreate(true)}
-            className="flex items-center gap-2 px-3 py-2 bg-accent text-accent-fg rounded-btn text-sm hover:bg-accent-hover"
-          >
-            <Plus className="w-4 h-4" /> New Project
-          </button>
-        )}
+        <button
+          onClick={() => setShowCreate(true)}
+          className="flex items-center gap-2 px-3 py-2 bg-accent text-accent-fg rounded-btn text-sm hover:bg-accent-hover"
+        >
+          <Plus className="w-4 h-4" /> New Project
+        </button>
       </div>
 
       {showCreate && (
@@ -61,22 +59,22 @@ export default function ProjectsView() {
           <h2 className="text-sm font-medium mb-3">Create Project</h2>
           <div className="space-y-3">
             <input
-              placeholder="Project name *"
-              value={name}
-              onChange={(e) => setName(e.target.value)}
-              className="w-full px-3 py-2 bg-bg-base border border-border rounded-btn text-sm"
+              placeholder="Project title *"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              className="w-full px-3 py-2 bg-bg-base border border-border rounded-btn text-sm text-text-primary"
             />
             <textarea
               placeholder="Description"
               value={description}
               onChange={(e) => setDescription(e.target.value)}
-              className="w-full px-3 py-2 bg-bg-base border border-border rounded-btn text-sm"
+              className="w-full px-3 py-2 bg-bg-base border border-border rounded-btn text-sm text-text-primary"
               rows={2}
             />
             <div className="flex gap-2">
               <button
-                onClick={() => createMutation.mutate({ name, description })}
-                disabled={!name}
+                onClick={() => createMutation.mutate({ title, description: description || undefined })}
+                disabled={!title}
                 className="px-3 py-1.5 bg-accent text-accent-fg rounded-btn text-sm disabled:opacity-50"
               >
                 Create
@@ -109,7 +107,7 @@ export default function ProjectsView() {
             >
               <div className="flex justify-between items-start">
                 <div>
-                  <h3 className="font-medium text-text-primary">{project.name}</h3>
+                  <h3 className="font-medium text-text-primary">{project.title}</h3>
                   <p className="text-sm text-text-secondary mt-1">{project.description || 'No description'}</p>
                 </div>
                 {isAdmin && (
@@ -127,12 +125,15 @@ export default function ProjectsView() {
               </div>
               <div className="mt-3 flex items-center gap-2">
                 <span className={`text-xs px-2 py-0.5 rounded-tag ${
-                  project.state === 'CreativeActive' ? 'bg-accent-subtle text-accent' :
-                  project.state === 'EngActive' ? 'bg-green-900/30 text-success' :
-                  project.state === 'Completed' ? 'bg-green-900/30 text-success' :
+                  project.state === 'creative_active' ? 'bg-accent-subtle text-accent' :
+                  project.state === 'eng_active' ? 'bg-green-900/30 text-success' :
+                  project.state === 'completed' ? 'bg-green-900/30 text-success' :
                   'bg-bg-subtle text-text-muted'
                 }`}>
-                  {project.state || 'Draft'}
+                  {project.state || 'draft'}
+                </span>
+                <span className="text-xs text-text-muted">
+                  {project.resolution_w}x{project.resolution_h} @ {project.fps}fps
                 </span>
               </div>
             </div>

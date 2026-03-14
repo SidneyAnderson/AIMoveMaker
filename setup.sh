@@ -85,10 +85,14 @@ echo ""
 # ---------------------------------------------------------------------------
 info "Creating directory structure..."
 mkdir -p data
+mkdir -p storage/{assets,outputs,snapshots}
 mkdir -p models/{image,video,audio,loras,controlnet}
 mkdir -p outputs
 mkdir -p snapshots
 mkdir -p logs
+
+# Ensure scripts are executable
+chmod +x setup.sh start.sh 2>/dev/null || true
 
 # ---------------------------------------------------------------------------
 # 4. Environment file

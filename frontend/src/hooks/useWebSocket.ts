@@ -15,7 +15,8 @@ export function useWebSocket({ url, onMessage, enabled = true }: UseWebSocketOpt
   const connect = useCallback(() => {
     if (!enabled) return
 
-    const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}${url}`
+    const token = useAuthStore.getState().accessToken || ''
+    const wsUrl = `${window.location.protocol === 'https:' ? 'wss:' : 'ws:'}//${window.location.host}${url}${url.includes('?') ? '&' : '?'}token=${token}`
     const ws = new WebSocket(wsUrl)
     wsRef.current = ws
 

@@ -8,13 +8,34 @@ import asyncio
 import json
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect, status
 from loguru import logger
 
 from backend.config import get_settings
 
 router = APIRouter(tags=["WebSocket"])
 settings = get_settings()
+
+
+async def _authenticate_ws(ws: WebSocket, token: str | None) -> bool:
+    """Authenticate WebSocket connection via JWT query param.
+
+    Usage: ws://host/ws/jobs/123?token=<jwt_access_token>
+    Returns True if authenticated, False (and closes WS) if not.
+    """
+    if not token:
+        await ws.close(code=status.WS_1008_POLICY_VIOLATION)
+        return False
+    try:
+        from backend.dependencies import decode_token
+        payload = decode_token(token)
+        if payload.get("type") != "access":
+            await ws.close(code=status.WS_1008_POLICY_VIOLATION)
+            return False
+        return True
+    except Exception:
+        await ws.close(code=status.WS_1008_POLICY_VIOLATION)
+        return False
 
 
 # ---------------------------------------------------------------------------
@@ -90,12 +111,15 @@ async def _redis_subscriber(channel: str, ws: WebSocket, manager: ConnectionMana
 # ---------------------------------------------------------------------------
 
 @router.websocket("/ws/jobs/{job_id}")
-async def ws_job_progress(ws: WebSocket, job_id: str):
+async def ws_job_progress(ws: WebSocket, job_id: str, token: str = Query(default="")):
     """Real-time progress for a specific job.
 
     Subscribes to Redis pub/sub channel job:{job_id}.
     Streams: { job_id, progress_pct, current_step, total_steps, eta_seconds, status }
+    Connect with: ws://host/ws/jobs/{id}?token=<jwt>
     """
+    if not await _authenticate_ws(ws, token):
+        return
     await job_manager.connect(job_id, ws)
 
     # Start Redis subscriber in background
@@ -124,12 +148,15 @@ async def ws_job_progress(ws: WebSocket, job_id: str):
 # ---------------------------------------------------------------------------
 
 @router.websocket("/ws/projects/{project_id}")
-async def ws_project_events(ws: WebSocket, project_id: str):
+async def ws_project_events(ws: WebSocket, project_id: str, token: str = Query(default="")):
     """Project-level events: state changes, handoffs, new assets.
 
     Subscribes to Redis pub/sub channel project:{project_id}.
     Streams: { event_type, payload, timestamp }
+    Connect with: ws://host/ws/projects/{id}?token=<jwt>
     """
+    if not await _authenticate_ws(ws, token):
+        return
     await project_manager.connect(project_id, ws)
 
     redis_channel = f"project:{project_id}"
@@ -155,12 +182,15 @@ async def ws_project_events(ws: WebSocket, project_id: str):
 # ---------------------------------------------------------------------------
 
 @router.websocket("/ws/logs")
-async def ws_logs(ws: WebSocket):
+async def ws_logs(ws: WebSocket, token: str = Query(default="")):
     """Live log stream for authenticated users.
 
     Subscribes to Redis pub/sub channel logs.
     Streams: { timestamp, level, message, trace_id, job_id, project_id }
+    Connect with: ws://host/ws/logs?token=<jwt>
     """
+    if not await _authenticate_ws(ws, token):
+        return
     await log_manager.connect("logs", ws)
 
     sub_task = asyncio.create_task(_redis_subscriber("logs", ws, log_manager))

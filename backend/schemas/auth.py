@@ -7,10 +7,22 @@ class LoginRequest(BaseModel):
     password: str
 
 
+class UserInfo(BaseModel):
+    id: str
+    email: str
+    full_name: str
+    global_role: str
+    force_password_change: bool
+
+    model_config = {"from_attributes": True}
+
+
 class TokenResponse(BaseModel):
     access_token: str
     refresh_token: str
     token_type: str = "bearer"
+    user: UserInfo | None = None
+    force_password_change: bool = False
 
 
 class RefreshRequest(BaseModel):

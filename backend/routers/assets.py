@@ -1,12 +1,16 @@
-"""Assets router with auth."""
+"""Assets router with auth — list, get, upload, download, delete."""
+import os
+import uuid
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, File, UploadFile, status
 from fastapi.responses import FileResponse
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from backend.config import get_settings
 from backend.database import get_db
 from backend.dependencies import get_current_active_user
+from backend.models.asset import Asset
 from backend.models.user import User
 from backend.schemas.assets import AssetListResponse, AssetResponse
 from backend.services.asset_service import delete_asset, get_asset, get_asset_path, list_assets
@@ -22,6 +26,55 @@ async def list_assets_endpoint(
 ):
     assets, total = await list_assets(db, project_id)
     return AssetListResponse(assets=assets, total=total)
+
+
+@router.post("/", response_model=AssetResponse, status_code=status.HTTP_201_CREATED)
+async def upload_asset(
+    project_id: str,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+    file: UploadFile = File(...),
+):
+    """Upload a file as a project asset (image, audio, video)."""
+    settings = get_settings()
+    asset_id = str(uuid.uuid4())
+
+    # Determine asset type from content type
+    content_type = file.content_type or "application/octet-stream"
+    if content_type.startswith("image/"):
+        asset_type = "image"
+    elif content_type.startswith("audio/"):
+        asset_type = "audio"
+    elif content_type.startswith("video/"):
+        asset_type = "video"
+    else:
+        asset_type = "other"
+
+    # Save file
+    asset_dir = os.path.join(settings.STORAGE_BASE_PATH, "assets", project_id)
+    os.makedirs(asset_dir, exist_ok=True)
+
+    ext = os.path.splitext(file.filename or "file")[1] or ".bin"
+    file_path = os.path.join(asset_dir, f"{asset_id}{ext}")
+
+    content = await file.read()
+    with open(file_path, "wb") as f:
+        f.write(content)
+
+    # Create asset record
+    asset = Asset(
+        id=asset_id,
+        project_id=project_id,
+        asset_type=asset_type,
+        file_path=file_path,
+        file_size_bytes=len(content),
+        mime_type=content_type,
+        created_by=current_user.id,
+    )
+    db.add(asset)
+    await db.flush()
+
+    return asset
 
 
 @router.get("/{asset_id}", response_model=AssetResponse)

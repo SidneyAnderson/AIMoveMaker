@@ -10,7 +10,7 @@ export async function getProject(id: string) {
   return res.data
 }
 
-export async function createProject(data: { name: string; description?: string }) {
+export async function createProject(data: { title: string; description?: string }) {
   const res = await api.post('/projects/', data)
   return res.data
 }

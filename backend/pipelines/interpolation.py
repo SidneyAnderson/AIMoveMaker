@@ -250,9 +250,9 @@ class RIFEPipeline:
         else:
             # Fallback: simple linear blend
             results = []
+            import numpy as np
             arr1 = np.array(img1, dtype=np.float32)
             arr2 = np.array(img2, dtype=np.float32)
-            import numpy as np
             for i in range(count):
                 alpha = (i + 1) / (count + 1)
                 blended = ((1 - alpha) * arr1 + alpha * arr2).astype(np.uint8)

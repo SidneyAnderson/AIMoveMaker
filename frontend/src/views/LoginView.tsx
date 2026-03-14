@@ -21,11 +21,15 @@ export default function LoginView() {
     try {
       const data = await login(email, password)
       setTokens(data.access_token, data.refresh_token)
-      setUser(data.user)
-      if (data.force_password_change) {
-        toast.warning('You must change your password before continuing.')
+      if (data.user) {
+        setUser(data.user)
       }
-      navigate('/')
+      if (data.force_password_change || data.user?.force_password_change) {
+        toast.warning('You must change your password before continuing.')
+        navigate('/change-password')
+      } else {
+        navigate('/projects')
+      }
     } catch (err: any) {
       const msg = err.response?.data?.detail || 'Login failed'
       setError(msg)

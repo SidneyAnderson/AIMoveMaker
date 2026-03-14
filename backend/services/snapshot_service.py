@@ -1,14 +1,21 @@
-"""Snapshot service — create, list, restore."""
+"""Snapshot service — create, list, restore project state."""
 import json
 import os
 from datetime import datetime, timezone
 
 from fastapi import HTTPException, status
-from sqlalchemy import func, select
+from sqlalchemy import delete, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.config import get_settings
+from backend.models.keyframe import Keyframe
 from backend.models.snapshot import Snapshot
+from backend.models.storyboard import Storyboard
+from backend.models.timeline import Timeline
+from backend.models.track import Track
+from backend.models.video_clip import VideoClip
+from backend.models.audio_clip import AudioClip
+from backend.models.project import Project
 
 settings = get_settings()
 
@@ -32,6 +39,17 @@ async def list_snapshots(
     return list(result.scalars().all()), total
 
 
+def _row_to_dict(obj: object, keys: list[str]) -> dict:
+    """Extract specified attributes from a model into a serializable dict."""
+    d = {}
+    for k in keys:
+        v = getattr(obj, k, None)
+        if isinstance(v, datetime):
+            v = v.isoformat()
+        d[k] = v
+    return d
+
+
 async def create_snapshot(
     db: AsyncSession,
     project_id: str,
@@ -39,7 +57,7 @@ async def create_snapshot(
     snap_type: str = "manual",
     label: str | None = None,
 ) -> Snapshot:
-    """Create a snapshot. For now, stores an empty JSON placeholder."""
+    """Create a snapshot containing the full project state (storyboard + timeline)."""
     base = os.path.join(settings.STORAGE_BASE_PATH, "snapshots", project_id)
     subdir = "checkpoints" if snap_type == "checkpoint" else (
         "manual" if snap_type == "manual" else "auto"
@@ -51,9 +69,77 @@ async def create_snapshot(
     filename = f"snapshot_{ts}.json"
     path = os.path.join(snap_dir, filename)
 
-    # Placeholder: full project export will be implemented per PRD spec
-    snapshot_data = {"project_id": project_id, "type": snap_type, "created_at": ts}
-    data_str = json.dumps(snapshot_data)
+    # Serialize project state
+    # 1. Storyboard + keyframes
+    sb_result = await db.execute(
+        select(Storyboard).where(Storyboard.project_id == project_id)
+    )
+    storyboard = sb_result.scalar_one_or_none()
+
+    keyframes_data = []
+    if storyboard:
+        kf_result = await db.execute(
+            select(Keyframe)
+            .where(Keyframe.storyboard_id == storyboard.id)
+            .order_by(Keyframe.order_index)
+        )
+        for kf in kf_result.scalars().all():
+            keyframes_data.append(_row_to_dict(kf, [
+                "id", "storyboard_id", "order_index", "prompt", "negative_prompt",
+                "seed", "seed_mode", "model_id", "scheduler", "steps", "cfg_scale",
+                "width", "height", "generation_params", "thumbnail_asset_id",
+            ]))
+
+    # 2. Timeline + tracks + clips
+    tl_result = await db.execute(
+        select(Timeline).where(Timeline.project_id == project_id)
+    )
+    timeline = tl_result.scalar_one_or_none()
+
+    tracks_data = []
+    video_clips_data = []
+    audio_clips_data = []
+    if timeline:
+        tr_result = await db.execute(
+            select(Track).where(Track.timeline_id == timeline.id).order_by(Track.order_index)
+        )
+        for tr in tr_result.scalars().all():
+            tracks_data.append(_row_to_dict(tr, [
+                "id", "timeline_id", "name", "type", "order_index", "is_locked", "is_visible",
+            ]))
+
+        vc_result = await db.execute(
+            select(VideoClip).where(VideoClip.timeline_id == timeline.id)
+        )
+        for vc in vc_result.scalars().all():
+            video_clips_data.append(_row_to_dict(vc, [
+                "id", "timeline_id", "track_id", "source_asset_id",
+                "start_frame", "end_frame", "generation_params",
+            ]))
+
+        ac_result = await db.execute(
+            select(AudioClip).where(AudioClip.timeline_id == timeline.id)
+        )
+        for ac in ac_result.scalars().all():
+            audio_clips_data.append(_row_to_dict(ac, [
+                "id", "timeline_id", "track_id", "source_asset_id",
+                "start_frame", "end_frame", "volume", "fade_in_ms", "fade_out_ms",
+            ]))
+
+    snapshot_data = {
+        "project_id": project_id,
+        "type": snap_type,
+        "created_at": ts,
+        "storyboard_id": storyboard.id if storyboard else None,
+        "keyframes": keyframes_data,
+        "timeline_id": timeline.id if timeline else None,
+        "timeline_duration_frames": timeline.duration_frames if timeline else 0,
+        "tracks": tracks_data,
+        "video_clips": video_clips_data,
+        "audio_clips": audio_clips_data,
+    }
+
+    data_str = json.dumps(snapshot_data, indent=2, default=str)
     with open(path, "w") as f:
         f.write(data_str)
 
@@ -71,7 +157,10 @@ async def create_snapshot(
 
 
 async def restore_snapshot(db: AsyncSession, snapshot_id: str) -> None:
-    """Restore a project to a snapshot state. Placeholder for now."""
+    """Restore a project to a snapshot state.
+
+    Replaces keyframes, tracks, and clips with the snapshot data.
+    """
     result = await db.execute(select(Snapshot).where(Snapshot.id == snapshot_id))
     snapshot = result.scalar_one_or_none()
     if snapshot is None:
@@ -83,4 +172,58 @@ async def restore_snapshot(db: AsyncSession, snapshot_id: str) -> None:
             status_code=status.HTTP_404_NOT_FOUND,
             detail="Snapshot file not found on disk",
         )
-    # Full restore logic will be implemented in integration phase
+
+    with open(snapshot.storage_path) as f:
+        data = json.load(f)
+
+    project_id = data["project_id"]
+
+    # Restore keyframes
+    storyboard_id = data.get("storyboard_id")
+    if storyboard_id:
+        # Delete existing keyframes
+        await db.execute(
+            delete(Keyframe).where(Keyframe.storyboard_id == storyboard_id)
+        )
+        # Re-create from snapshot
+        for kf_data in data.get("keyframes", []):
+            kf = Keyframe(**{k: v for k, v in kf_data.items() if v is not None})
+            db.add(kf)
+
+    # Restore timeline clips
+    timeline_id = data.get("timeline_id")
+    if timeline_id:
+        # Delete existing clips and tracks
+        await db.execute(
+            delete(VideoClip).where(VideoClip.timeline_id == timeline_id)
+        )
+        await db.execute(
+            delete(AudioClip).where(AudioClip.timeline_id == timeline_id)
+        )
+        await db.execute(
+            delete(Track).where(Track.timeline_id == timeline_id)
+        )
+
+        # Update timeline duration
+        tl_result = await db.execute(
+            select(Timeline).where(Timeline.id == timeline_id)
+        )
+        tl = tl_result.scalar_one_or_none()
+        if tl:
+            tl.duration_frames = data.get("timeline_duration_frames", 0)
+
+        # Re-create tracks
+        for tr_data in data.get("tracks", []):
+            tr = Track(**{k: v for k, v in tr_data.items() if v is not None})
+            db.add(tr)
+
+        # Re-create clips
+        for vc_data in data.get("video_clips", []):
+            vc = VideoClip(**{k: v for k, v in vc_data.items() if v is not None})
+            db.add(vc)
+
+        for ac_data in data.get("audio_clips", []):
+            ac = AudioClip(**{k: v for k, v in ac_data.items() if v is not None})
+            db.add(ac)
+
+    await db.flush()

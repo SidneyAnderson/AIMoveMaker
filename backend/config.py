@@ -8,7 +8,7 @@ class Settings(BaseSettings):
     SECRET_KEY: str = ""
     ENVIRONMENT: str = "development"
     LOG_LEVEL: str = "INFO"
-    STORAGE_BASE_PATH: str = "/opt/aimoviemaker"
+    STORAGE_BASE_PATH: str = "./storage"
 
     # JWT
     ACCESS_TOKEN_EXPIRE_MINUTES: int = 15

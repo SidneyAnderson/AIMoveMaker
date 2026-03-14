@@ -60,7 +60,19 @@ def build_token_pair(user: User) -> dict:
     extra = {"role": user.global_role, "fpc": user.force_password_change}
     access = create_access_token(user.id, extra=extra)
     refresh = create_refresh_token(user.id)
-    return {"access_token": access, "refresh_token": refresh, "token_type": "bearer"}
+    return {
+        "access_token": access,
+        "refresh_token": refresh,
+        "token_type": "bearer",
+        "user": {
+            "id": user.id,
+            "email": user.email,
+            "full_name": user.full_name,
+            "global_role": user.global_role,
+            "force_password_change": user.force_password_change,
+        },
+        "force_password_change": user.force_password_change,
+    }
 
 
 async def refresh_tokens(db: AsyncSession, refresh_token: str) -> dict:
