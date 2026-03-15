@@ -8,19 +8,26 @@ End-to-end AI film production platform. Generate images, videos, music, sound ef
 |------------|---------|----------|
 | Python     | 3.10+   | Yes      |
 | Node.js    | 18+     | Yes (frontend) |
+| CUDA GPU   | sm_75+  | Yes (AI generation) |
+| ffmpeg     | 4.0+    | Yes (video/audio processing) |
 | Redis      | 7+      | Yes (task queue & real-time) |
-| CUDA GPU   | sm_75+  | Recommended (AI pipelines) |
 
-### Optional (AI pipeline dependencies)
+### AI Pipeline Dependencies (installed automatically by setup.sh)
 
-These are loaded conditionally and only needed for GPU-accelerated generation:
+These are the core AI packages that power image, video, audio, and interpolation:
 
-- PyTorch 2.0+ with CUDA support
-- HuggingFace Diffusers, Transformers
-- AudioCraft (MusicGen / AudioGen)
-- Coqui TTS
-- wav2lip
-- RIFE (frame interpolation)
+| Package | Version | Purpose |
+|---------|---------|---------|
+| PyTorch | 2.5+ (CUDA) | Deep learning framework |
+| torchvision | — | Image transforms & models |
+| torchaudio | — | Audio processing |
+| Diffusers | 0.33+ | Stable Diffusion, LTX-V, WAN 2.2 |
+| Transformers | 4.46+ | DPT depth estimation, tokenizers |
+| AudioCraft | 1.3+ | MusicGen / AudioGen |
+| Coqui TTS | 0.22+ | Text-to-speech synthesis |
+| ControlNet-aux | 0.0.9+ | OpenPose, depth, edge preprocessors |
+
+`setup.sh` auto-detects your CUDA version and installs the matching PyTorch build. Without a CUDA GPU, CPU-only mode is installed (functional but significantly slower).
 
 ## Quick Start
 
@@ -39,7 +46,8 @@ chmod +x setup.sh start.sh
 
 The setup script will:
 - Create a Python virtual environment at `venv/`
-- Install all Python dependencies from `requirements.txt`
+- Auto-detect CUDA and install PyTorch with GPU support
+- Install all AI and web dependencies from `requirements.txt`
 - Create required directories (`data/`, `models/`, `outputs/`, `snapshots/`, `logs/`)
 - Copy `.env.example` to `.env` and generate a random `SECRET_KEY`
 - Run Alembic database migrations

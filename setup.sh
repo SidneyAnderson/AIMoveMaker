@@ -5,7 +5,7 @@
 # Bootstraps the project on a clean machine. Run once after cloning:
 #   chmod +x setup.sh && ./setup.sh
 #
-# Prerequisites: Python 3.11+, Node.js 18+, Redis 7+ (optional for dev)
+# Prerequisites: Python 3.10+, Node.js 18+, Redis 7+ (optional for dev)
 # ============================================================================
 set -euo pipefail
 
@@ -32,9 +32,9 @@ echo ""
 # ---------------------------------------------------------------------------
 info "Checking prerequisites..."
 
-# Python 3.11+
+# Python 3.10+
 if ! command -v python3 &> /dev/null; then
-    error "python3 not found. Install Python 3.11+ and try again."
+    error "python3 not found. Install Python 3.10+ and try again."
     exit 1
 fi
 PY_VER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
@@ -75,8 +75,53 @@ source venv/bin/activate
 info "Upgrading pip..."
 pip install --upgrade pip -q
 
+# ---- PyTorch (CUDA) ----
+# PyTorch must be installed from the PyTorch index, not PyPI, to get CUDA support.
+# Detect whether a CUDA-capable GPU is present.
+if python3 -c "
+import subprocess, sys
+try:
+    out = subprocess.check_output(['nvidia-smi'], stderr=subprocess.DEVNULL).decode()
+    sys.exit(0)
+except Exception:
+    sys.exit(1)
+" 2>/dev/null; then
+    CUDA_VER=$(python3 -c "
+import subprocess, re
+out = subprocess.check_output(['nvidia-smi'], stderr=subprocess.DEVNULL).decode()
+m = re.search(r'CUDA Version:\s*([\d]+)\.([\d]+)', out)
+if m:
+    major, minor = int(m.group(1)), int(m.group(2))
+    if major >= 12 and minor >= 4:
+        print('cu124')
+    elif major >= 12:
+        print('cu121')
+    elif major >= 11 and minor >= 8:
+        print('cu118')
+    else:
+        print('cu121')
+else:
+    print('cu121')
+" 2>/dev/null)
+    info "CUDA GPU detected — installing PyTorch with ${CUDA_VER} support..."
+    pip install torch torchvision torchaudio --index-url "https://download.pytorch.org/whl/${CUDA_VER}" -q
+else
+    warn "No CUDA GPU detected — installing PyTorch (CPU only)."
+    warn "AI pipelines will run on CPU (much slower). Use a CUDA GPU for production."
+    pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu -q
+fi
+
+# ---- Remaining dependencies ----
 info "Installing Python dependencies..."
 pip install -r requirements.txt -q
+
+# ---- Coqui TTS (installed separately due to strict numpy pin on Python 3.10) ----
+info "Installing Coqui TTS..."
+pip install TTS==0.22.0 --no-deps -q 2>/dev/null
+# Install TTS runtime dependencies (skipping numpy/pandas which conflict on Python 3.10)
+pip install trainer coqpit gruut bangla bnnumerizer bnunicodenormalizer \
+    unidecode pypinyin encodec g2pkk jieba pysbd anyascii inflect \
+    matplotlib hangul-romanize cython aiohttp umap-learn flask -q 2>/dev/null || true
 
 echo ""
 
@@ -93,6 +138,15 @@ mkdir -p logs
 
 # Ensure scripts are executable
 chmod +x setup.sh start.sh 2>/dev/null || true
+
+# Check for ffmpeg (required for video/audio processing)
+if command -v ffmpeg &> /dev/null; then
+    FFMPEG_VER=$(ffmpeg -version 2>/dev/null | head -1 | awk '{print $3}')
+    info "ffmpeg: $FFMPEG_VER"
+else
+    warn "ffmpeg not found. Video/audio processing requires ffmpeg."
+    warn "Install with: sudo apt install ffmpeg  (or brew install ffmpeg)"
+fi
 
 # ---------------------------------------------------------------------------
 # 4. Environment file

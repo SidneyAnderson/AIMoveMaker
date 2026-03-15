@@ -34,10 +34,17 @@ pydantic==2.10.4
 pydantic-settings==2.7.1
 email-validator==2.2.0
 
-# AI Pipelines (loaded conditionally)
-# torch - installed separately via CUDA index
-# diffusers - installed separately
-# transformers - installed separately
+# AI Pipelines
+# NOTE: torch, torchvision, torchaudio are installed by setup.sh from the
+#       PyTorch CUDA index (not PyPI) so they are NOT listed here.
+diffusers==0.33.1
+transformers==4.46.3
+accelerate==1.2.1
+safetensors==0.6.2
+audiocraft==1.3.0
+controlnet-aux==0.0.9
+opencv-python-headless==4.10.0.84
+numpy>=1.24.0,<2.0
 
 # File Processing
 Pillow==11.1.0
