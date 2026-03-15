@@ -82,7 +82,7 @@ fi
 # ---------------------------------------------------------------------------
 FRONTEND_PID=""
 if [[ "$API_ONLY" == "false" ]] && command -v node &> /dev/null && [ -d "frontend" ]; then
-    info "Starting Vite dev server on http://localhost:5173 (background)..."
+    info "Starting Vite dev server on http://localhost:3000 (background)..."
     (cd frontend && npm run dev > ../logs/vite.log 2>&1) &
     FRONTEND_PID=$!
     info "Vite dev server: PID $FRONTEND_PID"
@@ -95,7 +95,7 @@ echo ""
 info "Starting FastAPI server on http://0.0.0.0:8000"
 info "API docs:  http://localhost:8000/docs"
 if [[ -n "$FRONTEND_PID" ]]; then
-    info "Frontend:  http://localhost:5173"
+    info "Frontend:  http://localhost:3000"
 fi
 echo ""
 
