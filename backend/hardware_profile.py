@@ -56,7 +56,9 @@ def detect_gpu() -> dict:
             info["device_name"] = torch.cuda.get_device_name(0)
             info["compute_capability"] = torch.cuda.get_device_capability(0)
             props = torch.cuda.get_device_properties(0)
-            info["vram_total_mb"] = props.total_mem // (1024 * 1024)
+            # total_memory (PyTorch 2.1+) or total_mem (older)
+            total = getattr(props, "total_memory", None) or getattr(props, "total_mem", 0)
+            info["vram_total_mb"] = total // (1024 * 1024)
             mem_free = torch.cuda.mem_get_info(0)
             info["vram_free_mb"] = mem_free[0] // (1024 * 1024)
     except Exception as e:
