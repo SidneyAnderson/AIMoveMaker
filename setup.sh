@@ -28,40 +28,13 @@ echo "==========================================="
 echo ""
 
 # ---------------------------------------------------------------------------
-# 1. Check prerequisites
+# 1. Python virtual environment (must exist before prereq checks)
 # ---------------------------------------------------------------------------
-info "Checking prerequisites..."
-
-# Python 3.10+
 if ! command -v python3 &> /dev/null; then
     error "python3 not found. Install Python 3.10+ and try again."
     exit 1
 fi
-PY_VER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
-info "Python version: $PY_VER"
 
-# Node.js 18+ (for frontend)
-if command -v node &> /dev/null; then
-    NODE_VER=$(node --version)
-    info "Node.js version: $NODE_VER"
-else
-    warn "Node.js not found. Frontend will not be built."
-    warn "Install Node.js 18+ for the full experience."
-fi
-
-# Redis (optional)
-if command -v redis-cli &> /dev/null; then
-    info "Redis: found"
-else
-    warn "Redis not found. Celery worker and real-time features require Redis 7+."
-    warn "Install Redis or use Docker: docker run -d -p 6379:6379 redis:7"
-fi
-
-echo ""
-
-# ---------------------------------------------------------------------------
-# 2. Python virtual environment
-# ---------------------------------------------------------------------------
 if [ ! -d "venv" ]; then
     info "Creating Python virtual environment..."
     python3 -m venv venv
@@ -75,9 +48,49 @@ source venv/bin/activate
 info "Upgrading pip..."
 pip install --upgrade pip -q
 
-# ---- PyTorch (CUDA) ----
-# PyTorch must be installed from the PyTorch index, not PyPI, to get CUDA support.
-# Detect whether a CUDA-capable GPU is present.
+# ---------------------------------------------------------------------------
+# 2. Verify prerequisites (using the venv Python)
+# ---------------------------------------------------------------------------
+echo ""
+info "Checking prerequisites..."
+
+# Python version
+PY_VER=$(python3 -c "import sys; print(f'{sys.version_info.major}.{sys.version_info.minor}')")
+PY_MAJOR=$(python3 -c "import sys; print(sys.version_info.major)")
+PY_MINOR=$(python3 -c "import sys; print(sys.version_info.minor)")
+if [ "$PY_MAJOR" -lt 3 ] || ([ "$PY_MAJOR" -eq 3 ] && [ "$PY_MINOR" -lt 10 ]); then
+    error "Python 3.10+ required, found $PY_VER"
+    exit 1
+fi
+info "Python version: $PY_VER ✓"
+
+# Node.js 18+ (for frontend)
+if command -v node &> /dev/null; then
+    NODE_VER=$(node --version)
+    info "Node.js version: $NODE_VER ✓"
+else
+    warn "Node.js not found. Frontend will not be built."
+    warn "Install Node.js 18+ for the full experience."
+fi
+
+# ffmpeg (required for video/audio processing)
+if command -v ffmpeg &> /dev/null; then
+    FFMPEG_VER=$(ffmpeg -version 2>/dev/null | head -1 | awk '{print $3}')
+    info "ffmpeg: $FFMPEG_VER ✓"
+else
+    warn "ffmpeg not found. Video/audio processing requires ffmpeg."
+    warn "Install with: sudo apt install ffmpeg  (or brew install ffmpeg)"
+fi
+
+# Redis (optional)
+if command -v redis-cli &> /dev/null; then
+    info "Redis: found ✓"
+else
+    warn "Redis not found. Celery worker and real-time features require Redis 7+."
+    warn "Install Redis or use Docker: docker run -d -p 6379:6379 redis:7"
+fi
+
+# CUDA GPU
 if python3 -c "
 import subprocess, sys
 try:
@@ -86,6 +99,12 @@ try:
 except Exception:
     sys.exit(1)
 " 2>/dev/null; then
+    GPU_NAME=$(python3 -c "
+import subprocess, re
+out = subprocess.check_output(['nvidia-smi'], stderr=subprocess.DEVNULL).decode()
+m = re.search(r'NVIDIA\s+([^\|]+)', out)
+print(m.group(1).strip() if m else 'Unknown NVIDIA GPU')
+" 2>/dev/null)
     CUDA_VER=$(python3 -c "
 import subprocess, re
 out = subprocess.check_output(['nvidia-smi'], stderr=subprocess.DEVNULL).decode()
@@ -103,15 +122,30 @@ if m:
 else:
     print('cu121')
 " 2>/dev/null)
-    info "CUDA GPU detected — installing PyTorch with ${CUDA_VER} support..."
+    HAS_CUDA=true
+    info "GPU: $GPU_NAME (${CUDA_VER}) ✓"
+else
+    HAS_CUDA=false
+    warn "No CUDA GPU detected. AI pipelines will run on CPU (much slower)."
+fi
+
+echo ""
+
+# ---------------------------------------------------------------------------
+# 3. Install PyTorch (CUDA or CPU)
+# ---------------------------------------------------------------------------
+# PyTorch must be installed from the PyTorch index, not PyPI, to get CUDA support.
+if [ "$HAS_CUDA" = true ]; then
+    info "Installing PyTorch with ${CUDA_VER} support..."
     pip install torch torchvision torchaudio --index-url "https://download.pytorch.org/whl/${CUDA_VER}" -q
 else
-    warn "No CUDA GPU detected — installing PyTorch (CPU only)."
-    warn "AI pipelines will run on CPU (much slower). Use a CUDA GPU for production."
+    info "Installing PyTorch (CPU only)..."
     pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu -q
 fi
 
-# ---- Remaining dependencies ----
+# ---------------------------------------------------------------------------
+# 4. Install remaining Python dependencies
+# ---------------------------------------------------------------------------
 info "Installing Python dependencies..."
 pip install -r requirements.txt -q
 
@@ -126,7 +160,7 @@ pip install trainer coqpit gruut bangla bnnumerizer bnunicodenormalizer \
 echo ""
 
 # ---------------------------------------------------------------------------
-# 3. Directory structure
+# 5. Directory structure
 # ---------------------------------------------------------------------------
 info "Creating directory structure..."
 mkdir -p data
@@ -139,17 +173,8 @@ mkdir -p logs
 # Ensure scripts are executable
 chmod +x setup.sh start.sh 2>/dev/null || true
 
-# Check for ffmpeg (required for video/audio processing)
-if command -v ffmpeg &> /dev/null; then
-    FFMPEG_VER=$(ffmpeg -version 2>/dev/null | head -1 | awk '{print $3}')
-    info "ffmpeg: $FFMPEG_VER"
-else
-    warn "ffmpeg not found. Video/audio processing requires ffmpeg."
-    warn "Install with: sudo apt install ffmpeg  (or brew install ffmpeg)"
-fi
-
 # ---------------------------------------------------------------------------
-# 4. Environment file
+# 6. Environment file
 # ---------------------------------------------------------------------------
 if [ ! -f ".env" ]; then
     info "Creating .env from .env.example..."
@@ -165,13 +190,13 @@ fi
 echo ""
 
 # ---------------------------------------------------------------------------
-# 5. Database migrations
+# 7. Database migrations
 # ---------------------------------------------------------------------------
 info "Running database migrations..."
 alembic upgrade head
 
 # ---------------------------------------------------------------------------
-# 6. Seed database (admin + settings)
+# 8. Seed database (admin + settings)
 # ---------------------------------------------------------------------------
 info "Seeding database (admin user + global settings)..."
 python3 -m backend.seed
@@ -179,7 +204,7 @@ python3 -m backend.seed
 echo ""
 
 # ---------------------------------------------------------------------------
-# 7. Frontend dependencies
+# 9. Frontend dependencies
 # ---------------------------------------------------------------------------
 if command -v node &> /dev/null && [ -d "frontend" ]; then
     info "Installing frontend dependencies..."
