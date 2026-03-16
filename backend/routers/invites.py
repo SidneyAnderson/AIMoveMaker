@@ -31,7 +31,7 @@ async def list_invites_endpoint(
 ):
     """Admin lists all invites."""
     invites, total = await list_invites(db)
-    return InviteListResponse(invites=invites, total=total)
+    return InviteListResponse(items=invites, total=total)
 
 
 @router.delete("/{invite_id}", status_code=status.HTTP_204_NO_CONTENT)

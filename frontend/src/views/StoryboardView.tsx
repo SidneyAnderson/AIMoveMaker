@@ -47,7 +47,7 @@ export default function StoryboardView() {
     enabled: !!projectId,
   })
 
-  const keyframes: any[] = data?.keyframes || []
+  const keyframes: any[] = data?.items || []
   const selectedKeyframe = keyframes.find((kf: any) => kf.id === selectedKeyframeId)
 
   const createMutation = useMutation({

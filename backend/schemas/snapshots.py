@@ -23,5 +23,8 @@ class SnapshotResponse(BaseModel):
 
 
 class SnapshotListResponse(BaseModel):
-    snapshots: list[SnapshotResponse]
+    items: list[SnapshotResponse]
     total: int
+    page: int = 1
+    page_size: int = 100
+    pages: int = 1

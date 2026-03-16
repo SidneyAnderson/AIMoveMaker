@@ -24,7 +24,7 @@ async def list_models_endpoint(
     architecture: str | None = None,
 ):
     models, total = await list_models(db, type_filter=type_filter, architecture=architecture)
-    return ModelRegistryListResponse(models=models, total=total)
+    return ModelRegistryListResponse(items=models, total=total)
 
 
 @router.post("/", response_model=ModelRegistryResponse, status_code=status.HTTP_201_CREATED)

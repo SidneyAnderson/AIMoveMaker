@@ -22,7 +22,7 @@ async def list_jobs_endpoint(
     type_filter: str | None = None,
 ):
     jobs, total = await list_jobs(db, project_id=project_id, status_filter=status_filter, type_filter=type_filter)
-    return JobListResponse(jobs=jobs, total=total)
+    return JobListResponse(items=jobs, total=total)
 
 
 @router.post("/", response_model=JobResponse, status_code=status.HTTP_201_CREATED)

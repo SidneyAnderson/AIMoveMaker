@@ -22,5 +22,8 @@ class InviteResponse(BaseModel):
 
 
 class InviteListResponse(BaseModel):
-    invites: list[InviteResponse]
+    items: list[InviteResponse]
     total: int
+    page: int = 1
+    page_size: int = 100
+    pages: int = 1

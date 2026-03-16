@@ -20,5 +20,8 @@ class NotificationResponse(BaseModel):
 
 
 class NotificationListResponse(BaseModel):
-    notifications: list[NotificationResponse]
+    items: list[NotificationResponse]
     total: int
+    page: int = 1
+    page_size: int = 100
+    pages: int = 1

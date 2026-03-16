@@ -20,7 +20,7 @@ async def list_settings_endpoint(
 ):
     settings, total = await list_settings(db)
     return SettingListResponse(
-        settings=[
+        items=[
             SettingResponse(
                 id=s.id, key=s.key,
                 value=None if s.is_secret else s.value,

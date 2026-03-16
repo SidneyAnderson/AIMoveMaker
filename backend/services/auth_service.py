@@ -69,6 +69,7 @@ def build_token_pair(user: User) -> dict:
             "email": user.email,
             "full_name": user.full_name,
             "global_role": user.global_role,
+            "approval_state": user.approval_state,
             "force_password_change": user.force_password_change,
         },
         "force_password_change": user.force_password_change,

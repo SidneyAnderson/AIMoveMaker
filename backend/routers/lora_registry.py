@@ -20,7 +20,7 @@ async def list_loras_endpoint(
     architecture: str | None = None,
 ):
     loras, total = await list_loras(db, architecture=architecture)
-    return LoRARegistryListResponse(loras=loras, total=total)
+    return LoRARegistryListResponse(items=loras, total=total)
 
 
 @router.post("/", response_model=LoRARegistryResponse, status_code=status.HTTP_201_CREATED)

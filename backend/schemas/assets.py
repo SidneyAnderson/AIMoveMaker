@@ -10,7 +10,7 @@ class AssetResponse(BaseModel):
     job_id: str | None = None
     type: str
     subtype: str
-    storage_path: str
+    # NOTE: storage_path intentionally excluded per PRD 13.11
     mime_type: str
     width: int | None = None
     height: int | None = None
@@ -22,5 +22,8 @@ class AssetResponse(BaseModel):
 
 
 class AssetListResponse(BaseModel):
-    assets: list[AssetResponse]
+    items: list[AssetResponse]
     total: int
+    page: int = 1
+    page_size: int = 100
+    pages: int = 1

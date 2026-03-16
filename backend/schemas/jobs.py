@@ -51,8 +51,11 @@ class JobResponse(BaseModel):
 
 
 class JobListResponse(BaseModel):
-    jobs: list[JobResponse]
+    items: list[JobResponse]
     total: int
+    page: int = 1
+    page_size: int = 100
+    pages: int = 1
 
 
 # --- Batches ---
@@ -78,5 +81,8 @@ class BatchResponse(BaseModel):
 
 
 class BatchListResponse(BaseModel):
-    batches: list[BatchResponse]
+    items: list[BatchResponse]
     total: int
+    page: int = 1
+    page_size: int = 100
+    pages: int = 1

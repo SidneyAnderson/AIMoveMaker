@@ -46,7 +46,7 @@ async def list_projects_endpoint(
     limit: int = 100,
 ):
     projects, total = await list_projects(db, current_user, skip=skip, limit=limit)
-    return ProjectListResponse(projects=projects, total=total)
+    return ProjectListResponse(items=projects, total=total)
 
 
 @router.post("/", response_model=ProjectResponse, status_code=status.HTTP_201_CREATED)
@@ -96,7 +96,7 @@ async def list_members_endpoint(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     members, total = await list_members(db, project_id)
-    return ProjectMemberListResponse(members=members, total=total)
+    return ProjectMemberListResponse(items=members, total=total)
 
 
 @router.post(
@@ -132,7 +132,7 @@ async def list_handoffs_endpoint(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     handoffs, total = await list_handoffs(db, project_id)
-    return HandoffListResponse(handoffs=handoffs, total=total)
+    return HandoffListResponse(items=handoffs, total=total)
 
 
 @router.post(

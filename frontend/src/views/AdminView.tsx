@@ -17,7 +17,7 @@ export default function AdminView() {
     },
   })
 
-  const users = usersData?.users || []
+  const users = usersData?.items || []
 
   // ---- Invite mutation ----
   const inviteMutation = useMutation({

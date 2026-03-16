@@ -40,7 +40,7 @@ export default function ProjectsView() {
     },
   })
 
-  const projects = data?.projects || []
+  const projects = data?.items || []
 
   return (
     <div className="p-6">

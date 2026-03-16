@@ -36,5 +36,8 @@ class UserResponse(BaseModel):
 
 
 class UserListResponse(BaseModel):
-    users: list[UserResponse]
+    items: list[UserResponse]
     total: int
+    page: int = 1
+    page_size: int = 100
+    pages: int = 1

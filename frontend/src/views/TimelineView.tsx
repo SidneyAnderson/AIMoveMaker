@@ -79,9 +79,9 @@ export default function TimelineView() {
     enabled: !!projectId,
   })
 
-  const tracks: any[] = tracksQuery.data?.tracks || []
-  const videoClips: any[] = videoClipsQuery.data?.clips || videoClipsQuery.data?.video_clips || []
-  const audioClips: any[] = audioClipsQuery.data?.clips || audioClipsQuery.data?.audio_clips || []
+  const tracks: any[] = tracksQuery.data?.items || []
+  const videoClips: any[] = videoClipsQuery.data?.items || []
+  const audioClips: any[] = audioClipsQuery.data?.items || []
   const allClips = [...videoClips, ...audioClips]
 
   // ---- mutations ----

@@ -64,7 +64,7 @@ class ModelRegistryResponse(BaseModel):
     lora_weight_min: float
     lora_weight_max: float
     max_lora_stack_size: int
-    storage_path: str
+    # NOTE: storage_path intentionally excluded per PRD 13.11
     source_url: str | None = None
     hf_repo_id: str | None = None
     civitai_id: str | None = None
@@ -78,8 +78,11 @@ class ModelRegistryResponse(BaseModel):
 
 
 class ModelRegistryListResponse(BaseModel):
-    models: list[ModelRegistryResponse]
+    items: list[ModelRegistryResponse]
     total: int
+    page: int = 1
+    page_size: int = 100
+    pages: int = 1
 
 
 # --- LoRA Registry ---
@@ -104,7 +107,7 @@ class LoRARegistryResponse(BaseModel):
     name: str
     display_name: str
     architecture: str
-    storage_path: str
+    # NOTE: storage_path intentionally excluded per PRD 13.11
     source_url: str | None = None
     hf_repo_id: str | None = None
     civitai_id: str | None = None
@@ -121,5 +124,8 @@ class LoRARegistryResponse(BaseModel):
 
 
 class LoRARegistryListResponse(BaseModel):
-    loras: list[LoRARegistryResponse]
+    items: list[LoRARegistryResponse]
     total: int
+    page: int = 1
+    page_size: int = 100
+    pages: int = 1

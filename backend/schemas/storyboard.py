@@ -109,5 +109,8 @@ class KeyframeResponse(BaseModel):
 
 
 class KeyframeListResponse(BaseModel):
-    keyframes: list[KeyframeResponse]
+    items: list[KeyframeResponse]
     total: int
+    page: int = 1
+    page_size: int = 100
+    pages: int = 1

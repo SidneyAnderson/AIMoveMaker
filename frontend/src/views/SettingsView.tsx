@@ -17,7 +17,7 @@ export default function SettingsView() {
     },
   })
 
-  const settings = data?.settings || []
+  const settings = data?.items || []
 
   const saveMutation = useMutation({
     mutationFn: async ({ key, value }: { key: string; value: string }) => {

@@ -20,7 +20,7 @@ async def list_notifications_endpoint(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     notifications, total = await list_notifications(db, current_user.id)
-    return NotificationListResponse(notifications=notifications, total=total)
+    return NotificationListResponse(items=notifications, total=total)
 
 
 @router.patch("/{notification_id}/read", response_model=NotificationResponse)

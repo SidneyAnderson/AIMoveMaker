@@ -42,8 +42,11 @@ class ProjectResponse(BaseModel):
 
 
 class ProjectListResponse(BaseModel):
-    projects: list[ProjectResponse]
+    items: list[ProjectResponse]
     total: int
+    page: int = 1
+    page_size: int = 100
+    pages: int = 1
 
 
 # --- Project Members ---
@@ -65,8 +68,11 @@ class ProjectMemberResponse(BaseModel):
 
 
 class ProjectMemberListResponse(BaseModel):
-    members: list[ProjectMemberResponse]
+    items: list[ProjectMemberResponse]
     total: int
+    page: int = 1
+    page_size: int = 100
+    pages: int = 1
 
 
 # --- Handoffs ---
@@ -90,5 +96,8 @@ class HandoffResponse(BaseModel):
 
 
 class HandoffListResponse(BaseModel):
-    handoffs: list[HandoffResponse]
+    items: list[HandoffResponse]
     total: int
+    page: int = 1
+    page_size: int = 100
+    pages: int = 1

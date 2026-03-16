@@ -20,7 +20,7 @@ async def list_tracks_endpoint(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     tracks, total = await list_tracks(db, project_id)
-    return TrackListResponse(tracks=tracks, total=total)
+    return TrackListResponse(items=tracks, total=total)
 
 
 @router.post("/", response_model=TrackResponse, status_code=status.HTTP_201_CREATED)

@@ -23,7 +23,7 @@ async def list_video_clips_endpoint(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     clips, total = await list_video_clips(db, project_id)
-    return VideoClipListResponse(video_clips=clips, total=total)
+    return VideoClipListResponse(items=clips, total=total)
 
 
 @router.post("/", response_model=VideoClipResponse, status_code=status.HTTP_201_CREATED)

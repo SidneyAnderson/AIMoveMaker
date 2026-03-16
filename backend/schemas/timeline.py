@@ -55,8 +55,11 @@ class TrackResponse(BaseModel):
 
 
 class TrackListResponse(BaseModel):
-    tracks: list[TrackResponse]
+    items: list[TrackResponse]
     total: int
+    page: int = 1
+    page_size: int = 100
+    pages: int = 1
 
 
 # --- Video Clips ---
@@ -156,8 +159,11 @@ class VideoClipResponse(BaseModel):
 
 
 class VideoClipListResponse(BaseModel):
-    video_clips: list[VideoClipResponse]
+    items: list[VideoClipResponse]
     total: int
+    page: int = 1
+    page_size: int = 100
+    pages: int = 1
 
 
 # --- Audio Clips ---
@@ -229,5 +235,8 @@ class AudioClipResponse(BaseModel):
 
 
 class AudioClipListResponse(BaseModel):
-    audio_clips: list[AudioClipResponse]
+    items: list[AudioClipResponse]
     total: int
+    page: int = 1
+    page_size: int = 100
+    pages: int = 1

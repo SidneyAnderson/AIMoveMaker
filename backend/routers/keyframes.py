@@ -31,7 +31,7 @@ async def list_keyframes_endpoint(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     keyframes, total = await list_keyframes(db, project_id)
-    return KeyframeListResponse(keyframes=keyframes, total=total)
+    return KeyframeListResponse(items=keyframes, total=total)
 
 
 @router.post("/", response_model=KeyframeResponse, status_code=status.HTTP_201_CREATED)

@@ -20,7 +20,7 @@ async def list_batches_endpoint(
     project_id: str | None = None,
 ):
     batches, total = await list_batches(db, project_id=project_id)
-    return BatchListResponse(batches=batches, total=total)
+    return BatchListResponse(items=batches, total=total)
 
 
 @router.post("/", response_model=BatchResponse, status_code=status.HTTP_201_CREATED)

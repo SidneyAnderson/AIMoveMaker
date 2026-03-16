@@ -46,7 +46,7 @@ async def list_all_users(
 ):
     """Admin: list all users."""
     users, total = await list_users(db, skip=skip, limit=limit)
-    return UserListResponse(users=users, total=total)
+    return UserListResponse(items=users, total=total)
 
 
 @router.post("/", response_model=UserResponse, status_code=status.HTTP_201_CREATED)

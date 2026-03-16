@@ -25,7 +25,7 @@ async def list_assets_endpoint(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     assets, total = await list_assets(db, project_id)
-    return AssetListResponse(assets=assets, total=total)
+    return AssetListResponse(items=assets, total=total)
 
 
 @router.post("/", response_model=AssetResponse, status_code=status.HTTP_201_CREATED)
@@ -61,15 +61,23 @@ async def upload_asset(
     with open(file_path, "wb") as f:
         f.write(content)
 
-    # Create asset record
+    # Determine subtype from asset type
+    subtype_map = {
+        "image": "still",
+        "audio": "music",
+        "video": "clip",
+        "other": "export",
+    }
+
+    # Create asset record (field names match Asset model exactly)
     asset = Asset(
         id=asset_id,
         project_id=project_id,
-        asset_type=asset_type,
-        file_path=file_path,
+        type=asset_type,
+        subtype=subtype_map.get(asset_type, "export"),
+        storage_path=file_path,
         file_size_bytes=len(content),
         mime_type=content_type,
-        created_by=current_user.id,
     )
     db.add(asset)
     await db.flush()

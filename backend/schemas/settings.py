@@ -25,5 +25,8 @@ class SettingResponse(BaseModel):
 
 
 class SettingListResponse(BaseModel):
-    settings: list[SettingResponse]
+    items: list[SettingResponse]
     total: int
+    page: int = 1
+    page_size: int = 100
+    pages: int = 1

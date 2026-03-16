@@ -23,7 +23,7 @@ async def list_audio_clips_endpoint(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     clips, total = await list_audio_clips(db, project_id)
-    return AudioClipListResponse(audio_clips=clips, total=total)
+    return AudioClipListResponse(items=clips, total=total)
 
 
 @router.post("/", response_model=AudioClipResponse, status_code=status.HTTP_201_CREATED)

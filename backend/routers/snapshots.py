@@ -21,7 +21,7 @@ async def list_snapshots_endpoint(
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
     snapshots, total = await list_snapshots(db, project_id)
-    return SnapshotListResponse(snapshots=snapshots, total=total)
+    return SnapshotListResponse(items=snapshots, total=total)
 
 
 @router.post("/", response_model=SnapshotResponse, status_code=status.HTTP_201_CREATED)

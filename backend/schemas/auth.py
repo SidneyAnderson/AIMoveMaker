@@ -12,6 +12,7 @@ class UserInfo(BaseModel):
     email: str
     full_name: str
     global_role: str
+    approval_state: str
     force_password_change: bool
 
     model_config = {"from_attributes": True}
