@@ -108,14 +108,29 @@ print(m.group(1).strip() if m else 'Unknown NVIDIA GPU')
     CUDA_VER=$(python3 -c "
 import subprocess, re
 out = subprocess.check_output(['nvidia-smi'], stderr=subprocess.DEVNULL).decode()
+
+# Detect GPU architecture from name (Blackwell = RTX 50xx series)
+is_blackwell = bool(re.search(r'RTX\s*50[0-9]{2}', out))
+
+# Parse CUDA driver version
 m = re.search(r'CUDA Version:\s*([\d]+)\.([\d]+)', out)
 if m:
     major, minor = int(m.group(1)), int(m.group(2))
-    if major >= 12 and minor >= 4:
+    # Blackwell GPUs (sm_120) REQUIRE cu128 minimum for native support
+    if is_blackwell:
+        print('cu128')
+    elif major >= 13:
+        # CUDA 13.x drivers → cu128 (best available, backward compat)
+        print('cu128')
+    elif major == 12 and minor >= 8:
+        print('cu128')
+    elif major == 12 and minor >= 6:
+        print('cu126')
+    elif major == 12 and minor >= 4:
         print('cu124')
     elif major >= 12:
         print('cu121')
-    elif major >= 11 and minor >= 8:
+    elif major == 11 and minor >= 8:
         print('cu118')
     else:
         print('cu121')
@@ -135,9 +150,25 @@ echo ""
 # 3. Install PyTorch (CUDA or CPU)
 # ---------------------------------------------------------------------------
 # PyTorch must be installed from the PyTorch index, not PyPI, to get CUDA support.
+# We uninstall first to avoid pip saying "already satisfied" with an old/wrong build.
 if [ "$HAS_CUDA" = true ]; then
+    PYTORCH_INDEX="https://download.pytorch.org/whl/${CUDA_VER}"
     info "Installing PyTorch with ${CUDA_VER} support..."
-    pip install torch torchvision torchaudio --index-url "https://download.pytorch.org/whl/${CUDA_VER}" -q
+    # Check if existing torch matches the target CUDA version
+    CURRENT_TORCH=$(pip show torch 2>/dev/null | grep "^Version:" | awk '{print $2}' || echo "")
+    if [ -n "$CURRENT_TORCH" ]; then
+        if echo "$CURRENT_TORCH" | grep -q "${CUDA_VER}"; then
+            info "PyTorch $CURRENT_TORCH already installed with ${CUDA_VER}."
+        else
+            info "Replacing PyTorch $CURRENT_TORCH with ${CUDA_VER} build..."
+            pip uninstall torch torchvision torchaudio -y -q 2>/dev/null || true
+        fi
+    fi
+    pip install torch torchvision torchaudio --index-url "$PYTORCH_INDEX" -q
+    # Install xformers for memory-efficient attention (matches PyTorch CUDA build)
+    info "Installing xformers..."
+    pip install xformers --index-url "$PYTORCH_INDEX" -q 2>/dev/null || \
+        warn "xformers installation failed (optional — PyTorch SDPA will be used instead)."
 else
     info "Installing PyTorch (CPU only)..."
     pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu -q

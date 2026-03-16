@@ -8,7 +8,7 @@ End-to-end AI film production platform. Generate images, videos, music, sound ef
 |------------|---------|----------|
 | Python     | 3.10+   | Yes      |
 | Node.js    | 18+     | Yes (frontend) |
-| CUDA GPU   | sm_75+  | Yes (AI generation) |
+| CUDA GPU   | sm_75+ (Blackwell sm_120 supported) | Yes (AI generation) |
 | ffmpeg     | 4.0+    | Yes (video/audio processing) |
 | Redis      | 7+      | Yes (task queue & real-time) |
 
@@ -18,7 +18,7 @@ These are the core AI packages that power image, video, audio, and interpolation
 
 | Package | Version | Purpose |
 |---------|---------|---------|
-| PyTorch | 2.5+ (CUDA) | Deep learning framework |
+| PyTorch | 2.10+ (CUDA) | Deep learning framework |
 | torchvision | — | Image transforms & models |
 | torchaudio | — | Audio processing |
 | Diffusers | 0.33+ | Stable Diffusion, LTX-V, WAN 2.2 |
@@ -26,8 +26,9 @@ These are the core AI packages that power image, video, audio, and interpolation
 | AudioCraft | 1.3+ | MusicGen / AudioGen |
 | Coqui TTS | 0.22+ | Text-to-speech synthesis |
 | ControlNet-aux | 0.0.9+ | OpenPose, depth, edge preprocessors |
+| xformers | 0.0.35+ | Memory-efficient attention |
 
-`setup.sh` auto-detects your CUDA version and installs the matching PyTorch build. Without a CUDA GPU, CPU-only mode is installed (functional but significantly slower).
+`setup.sh` auto-detects your CUDA version and GPU architecture, then installs the matching PyTorch build. **Blackwell GPUs** (RTX 5090/5080/5070 — sm_120) require PyTorch 2.10+ with CUDA 12.8 (`cu128`), which is auto-detected and installed. Without a CUDA GPU, CPU-only mode is installed (functional but significantly slower).
 
 ## Quick Start
 
