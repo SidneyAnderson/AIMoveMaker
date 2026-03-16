@@ -155,13 +155,14 @@ if [ "$HAS_CUDA" = true ]; then
     PYTORCH_INDEX="https://download.pytorch.org/whl/${CUDA_VER}"
     info "Installing PyTorch with ${CUDA_VER} support..."
     # Check if existing torch matches the target CUDA version
-    CURRENT_TORCH=$(pip show torch 2>/dev/null | grep "^Version:" | awk '{print $2}' || echo "")
+    # Use Python import (not pip show) because __version__ includes the +cuXXX suffix
+    CURRENT_TORCH=$(python3 -c "import torch; print(torch.__version__)" 2>/dev/null || echo "")
     if [ -n "$CURRENT_TORCH" ]; then
         if echo "$CURRENT_TORCH" | grep -q "${CUDA_VER}"; then
             info "PyTorch $CURRENT_TORCH already installed with ${CUDA_VER}."
         else
             info "Replacing PyTorch $CURRENT_TORCH with ${CUDA_VER} build..."
-            pip uninstall torch torchvision torchaudio -y -q 2>/dev/null || true
+            pip uninstall torch torchvision torchaudio xformers -y -q 2>/dev/null || true
         fi
     fi
     pip install torch torchvision torchaudio --index-url "$PYTORCH_INDEX" -q
@@ -180,7 +181,14 @@ fi
 info "Installing Python dependencies..."
 pip install -r requirements.txt -q
 
-# ---- Coqui TTS (installed separately due to strict numpy pin on Python 3.10) ----
+# ---- AudioCraft (installed with --no-deps because it pins torch==2.1.0) ----
+info "Installing AudioCraft..."
+pip install audiocraft==1.3.0 --no-deps -q 2>/dev/null
+# Install AudioCraft runtime dependencies (excluding torch/torchvision/torchaudio/xformers)
+pip install av einops flashy hydra-core hydra_colorlog julius num2words \
+    sentencepiece spacy demucs librosa torchmetrics protobuf -q 2>/dev/null || true
+
+# ---- Coqui TTS (installed with --no-deps because it pins numpy==1.22 on Python 3.10) ----
 info "Installing Coqui TTS..."
 pip install TTS==0.22.0 --no-deps -q 2>/dev/null
 # Install TTS runtime dependencies (skipping numpy/pandas which conflict on Python 3.10)
