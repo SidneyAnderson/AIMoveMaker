@@ -103,6 +103,7 @@ def _update_batch_counters(job_id: str, terminal_status: str) -> None:
             logger.info(f"Batch {batch.id} counters updated: {done}/{total} done, {failed} failed, status={batch.status}")
 
             # Extra polish: auto major snapshot when a batch completes successfully (#12)
+            # Part of final tiered snapshots improvements in 13-gap closure.
             if batch.status == "done" and terminal_status == "done":
                 try:
                     from backend.services.snapshot_service import create_snapshot

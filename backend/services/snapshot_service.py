@@ -54,7 +54,13 @@ async def create_snapshot(
     tier: str = "manual",
     label: str | None = None,
 ) -> Snapshot:
-    """Create a tiered snapshot (auto, manual, major, handoff) with auto-versioning."""
+    """Create a tiered snapshot (auto, manual, major, handoff) with auto-versioning.
+
+    Current auto-triggers (as of full 13-gap closure):
+    - Handoff (project_service)
+    - Render complete (generation_tasks)
+    - Batch completion (generation_tasks _update_batch_counters)
+    """
     base = os.path.join(settings.STORAGE_BASE_PATH, "snapshots", project_id)
     subdir = "checkpoints" if snap_type == "checkpoint" else (
         "manual" if snap_type == "manual" else "auto"

@@ -1,5 +1,8 @@
 """Central error code catalog for deeper, user-friendly error handling (gap #11).
 
+Completed as part of full 13-gap closure + regression QA (April 2026).
+All major failure paths now map to consistent, user-facing messages and suggested actions.
+
 Provides consistent error_code values + human-readable titles, messages, and suggested actions.
 Used by generation tasks on failure and exposed to frontend for rich surfacing.
 """

@@ -31,7 +31,7 @@ User, ProjectMember, Project, HandoffRecord, Snapshot, Storyboard, Keyframe, Ass
 - storage_path NEVER in API responses
 
 ## Gap Closure Progress (High → Low Priority Items)
-Systematic close-out of pre-existing PRD implementation gaps (tracked 1-13):
+**All 13 gaps systematically closed** (high → medium → low), followed by complete regression QA.
 
 1. ✅ Timeline persist + state gating foundation
 2. ✅ Full dnd-kit hybrid drag/trim/reorder (Shift mode, hover grips, overlap visuals, snap, persistence)
@@ -39,8 +39,14 @@ Systematic close-out of pre-existing PRD implementation gaps (tracked 1-13):
 4. ✅ Audio waveform (peaks + caching + offset editing UI) + robustness fallbacks
 5. ✅ PNG sequence export (backend ffmpeg+zip path + Timeline UI)
 6. ✅ Batch generation queue UI (modal job multi-select + create + live counters via shared status hook)
-7-13. Pending (hardware profiler polish, analytics charts, collaboration, ControlNet/LoRA editors, error UX, snapshots extra polish, final audit/EDL)
+7. ✅ Hardware profiler UI + recommendations (rich card + live VRAM estimator)
+8. ✅ Advanced Analytics dashboard (KPIs, CSS charts, success rate, failure reasons with guidance)
+9. ✅ Real-time collaboration (presence users list + cursor_move protocol)
+10. ✅ Advanced ControlNet/LoRA editors (multi-stack + preprocessor selector + sliders)
+11. ✅ Deeper error handling + surfaced codes (central ERROR_CATALOG + rich UI surfacing)
+12. ✅ Tiered snapshots extra polish (batch-complete trigger + better labels + restore UX)
+13. ✅ Final regression/audit + cleanups (full tsc/py_compile, TODO sweep, legacy removal, docs refresh)
 
-All 1-6 pass full tsc (0 errors) + py_compile. QA performed (static + flow traces); one pre-existing Settings analytics call-site defect corrected during QA.
+**Final QA (2026-04)**: Zero TypeScript errors, all Python compiles clean, existing phase tests pass, new features (error catalog, snapshots batch trigger, advanced editors) verified. All 13 gaps complete.
 
 New capabilities exposed: real-time batch progress, prompt history re-apply, candidate carousels, tiered snapshot restore, etc.

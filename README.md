@@ -85,24 +85,32 @@ After running `./start.sh`, you will have:
 7. **Generate video** from the assembled timeline
 8. **Export** the final output
 
-## v1 Implementation Status (Gaps Closed)
+## v1 Implementation Status — All 13 Gaps Closed ✅
 
-High and medium priority gaps from the original project backlog have been systematically closed (items 1-6):
+**Complete systematic closure** of the original project backlog (high → medium → low priority items 1-13), followed by full regression QA:
 
-- **Full Timeline depth** — dnd-kit powered hybrid drag/trim/reorder (tracks + per-track clips), Shift-key reorder mode, hover-only grips, overlap conflict visuals, snap-to-grid/other-clips, live overrides + PATCH persistence on release, real audio waveforms with Web Audio peaks + offset editing.
-- **Advanced notifications** — multi-channel (in-app + email via SMTP templates + webhook), user preferences, WebSocket push, hooks on job complete, handoff, approvals, renders.
-- **Prompt Templates + History** — full CRUD, global/project scope, one-click re-apply in Storyboard/Canvas, auto-write on generation, negative prompts + scope toggle.
-- **Candidate variations** — carousel in Storyboard detail + keyframe cards.
-- **Tiered snapshots** — auto/manual/major/handoff, versioning, restore with state overwrite, UI modal with filters.
-- **Batch queue UI** — create from selected queued jobs in modal, live progress bars + counters (auto-updated on job terminal states via shared status hook).
-- **PNG sequence export** — dedicated ffmpeg path + ZIP packaging, exposed in Timeline toolbar.
-- **Robust audio + interpolation** — broad fallbacks (original video on lipsync/RIFE failure).
-- **Canvas pixel tools** — non-destructive masks, crop/rotate/flip/adjust, ControlNet/LoRA display, prompt integration.
-- **State machine + persona gating** — Draft → creative_active → pending_handoff → eng_active → ... with banners, disabled toolbars, and role enforcement.
+### High Priority (1-3)
+- Full Timeline depth (dnd-kit hybrid drag/trim/reorder with Shift mode, grips, overlap visuals, snap, live overrides + persistence).
+- Advanced notifications (multi-channel email via templates + webhook + WS, user prefs, hooks on key events).
+- Prompt Templates + History + Candidates (full CRUD, re-apply, auto-write, carousel).
 
-Low-priority items (hardware profiler polish, analytics charts, collaboration cursors, deeper ControlNet/LoRA editors, final audit) remain for subsequent work.
+### Medium Priority (4-6)
+- Audio waveform (real peaks + caching + offset editing) + robustness fallbacks.
+- PNG sequence export (ffmpeg + ZIP, exposed in UI).
+- Batch queue UI (job selection + creation + live progress counters).
 
-All changes pass `tsc --noEmit` (zero errors) and Python compile.
+### Low Priority (7-13) — All Polished & Verified
+- Hardware profiler UI + recommendations (rich card + live VRAM estimator).
+- Advanced Analytics dashboard (KPIs, CSS bar charts, success rate, failure reasons with guidance).
+- Real-time Collaboration (presence users list + full cursor_move protocol over project WS).
+- Advanced ControlNet/LoRA editors (multi-stack manager + preprocessor selector + strength sliders in creation form).
+- Deeper Error Handling (central `ERROR_CATALOG` + user-friendly surfacing in UI).
+- Tiered Snapshots extra polish (new batch-complete trigger + better labels + restore UX).
+- **Final Regression Audit** — full tsc/py_compile clean, TODO sweep, legacy cleanup, documentation refresh.
+
+**Verification**: Zero TypeScript errors, all Python files compile, existing phase tests pass, new features (error catalog, snapshots, editors) exercised and consistent.
+
+All changes are in `main` and have passed complete QA regression.
 
 ## Project Structure
 
