@@ -17,25 +17,24 @@ router = APIRouter(tags=["WebSocket"])
 settings = get_settings()
 
 
-async def _authenticate_ws(ws: WebSocket, token: str | None) -> bool:
+async def _authenticate_ws(ws: WebSocket, token: str | None) -> dict | None:
     """Authenticate WebSocket connection via JWT query param.
 
-    Usage: ws://host/ws/jobs/123?token=<jwt_access_token>
-    Returns True if authenticated, False (and closes WS) if not.
+    Returns the decoded payload (with user info) if valid, else None (and closes WS).
     """
     if not token:
         await ws.close(code=status.WS_1008_POLICY_VIOLATION)
-        return False
+        return None
     try:
         from backend.dependencies import decode_token
         payload = decode_token(token)
         if payload.get("type") != "access":
             await ws.close(code=status.WS_1008_POLICY_VIOLATION)
-            return False
-        return True
+            return None
+        return payload
     except Exception:
         await ws.close(code=status.WS_1008_POLICY_VIOLATION)
-        return False
+        return None
 
 
 # ---------------------------------------------------------------------------
@@ -71,6 +70,51 @@ class ConnectionManager:
 job_manager = ConnectionManager()
 project_manager = ConnectionManager()
 log_manager = ConnectionManager()
+
+# Simple in-memory presence for collaboration (low-pri feature)
+# project_id -> list of active users
+presence: dict[str, list[dict]] = {}
+
+
+def _get_user_from_payload(payload: dict) -> dict:
+    """Extract minimal user info for presence/cursors from JWT payload."""
+    return {
+        "id": payload.get("sub") or payload.get("user_id"),
+        "email": payload.get("email", "unknown"),
+        "full_name": payload.get("full_name") or payload.get("name") or payload.get("email", "User"),
+    }
+
+
+class PresenceManager:
+    """Lightweight presence tracking + broadcast for a project."""
+
+    def add(self, project_id: str, user: dict):
+        presence.setdefault(project_id, [])
+        # Avoid duplicates
+        if not any(u["id"] == user["id"] for u in presence[project_id]):
+            presence[project_id].append({**user, "last_active": datetime.now(timezone.utc).isoformat()})
+        return presence[project_id]
+
+    def remove(self, project_id: str, user_id: str):
+        if project_id in presence:
+            presence[project_id] = [u for u in presence[project_id] if u["id"] != user_id]
+            if not presence[project_id]:
+                del presence[project_id]
+        return presence.get(project_id, [])
+
+    def get(self, project_id: str):
+        return presence.get(project_id, [])
+
+    async def broadcast_update(self, project_id: str):
+        users = self.get(project_id)
+        await project_manager.broadcast(project_id, {
+            "type": "presence_update",
+            "users": users,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+
+
+presence_manager = PresenceManager()
 
 
 # ---------------------------------------------------------------------------
@@ -118,7 +162,8 @@ async def ws_job_progress(ws: WebSocket, job_id: str, token: str = Query(default
     Streams: { job_id, progress_pct, current_step, total_steps, eta_seconds, status }
     Connect with: ws://host/ws/jobs/{id}?token=<jwt>
     """
-    if not await _authenticate_ws(ws, token):
+    payload = await _authenticate_ws(ws, token)
+    if not payload:
         return
     await job_manager.connect(job_id, ws)
 
@@ -149,32 +194,69 @@ async def ws_job_progress(ws: WebSocket, job_id: str, token: str = Query(default
 
 @router.websocket("/ws/projects/{project_id}")
 async def ws_project_events(ws: WebSocket, project_id: str, token: str = Query(default="")):
-    """Project-level events: state changes, handoffs, new assets.
+    """Project-level events + real-time collaboration (presence + cursors for gap #9).
 
-    Subscribes to Redis pub/sub channel project:{project_id}.
-    Streams: { event_type, payload, timestamp }
-    Connect with: ws://host/ws/projects/{id}?token=<jwt>
+    Supports:
+    - Redis project events
+    - Client messages: {"type": "presence:join"} (auto on connect), {"type": "cursor_move", "x": 0.5, "y": 0.3, ...}
+    - Broadcasts: presence_update, cursor_move (for other clients)
     """
-    if not await _authenticate_ws(ws, token):
+    payload = await _authenticate_ws(ws, token)
+    if not payload:
         return
+
+    user = _get_user_from_payload(payload)
     await project_manager.connect(project_id, ws)
+
+    # --- Presence join on connect (collaboration feature) ---
+    current_users = presence_manager.add(project_id, user)
+    await presence_manager.broadcast_update(project_id)
 
     redis_channel = f"project:{project_id}"
     sub_task = asyncio.create_task(_redis_subscriber(redis_channel, ws, project_manager))
 
     try:
         while True:
-            data = await ws.receive_text()
-            if data == "ping":
-                await ws.send_json({
-                    "type": "pong",
-                    "timestamp": datetime.now(timezone.utc).isoformat(),
-                })
+            raw = await ws.receive_text()
+            if raw == "ping":
+                await ws.send_json({"type": "pong", "timestamp": datetime.now(timezone.utc).isoformat()})
+                continue
+
+            try:
+                msg = json.loads(raw)
+                msg_type = msg.get("type")
+
+                if msg_type == "presence:leave":
+                    presence_manager.remove(project_id, user["id"])
+                    await presence_manager.broadcast_update(project_id)
+
+                elif msg_type == "cursor_move":
+                    # Broadcast cursor position to everyone else in the project (including sender for echo if wanted)
+                    await project_manager.broadcast(project_id, {
+                        "type": "cursor_move",
+                        "user": user,
+                        "x": msg.get("x"),
+                        "y": msg.get("y"),
+                        "view": msg.get("view", "timeline"),
+                        "timestamp": datetime.now(timezone.utc).isoformat(),
+                    })
+
+                elif msg_type == "presence:join":
+                    # Re-broadcast current list (idempotent)
+                    await presence_manager.broadcast_update(project_id)
+
+            except Exception:
+                # Ignore bad client messages
+                pass
+
     except WebSocketDisconnect:
         pass
     finally:
         sub_task.cancel()
         project_manager.disconnect(project_id, ws)
+        # Leave presence
+        presence_manager.remove(project_id, user["id"])
+        await presence_manager.broadcast_update(project_id)
 
 
 # ---------------------------------------------------------------------------
@@ -189,11 +271,12 @@ async def ws_user_notifications(ws: WebSocket, token: str = Query(default=""), u
     Streams: { type: "notification", notification, timestamp }
     Connect with: ws://host/ws/notifications?token=<jwt>&user_id=<uid>
     """
-    if not await _authenticate_ws(ws, token):
+    payload = await _authenticate_ws(ws, token)
+    if not payload:
         return
     if not user_id:
         # Fallback: allow without explicit uid (client can filter)
-        user_id = "broadcast"
+        user_id = payload.get("sub") or payload.get("user_id") or "broadcast"
     channel = f"user:{user_id}:notifications"
     await job_manager.connect(channel, ws)  # reuse manager ok for notifs
 
@@ -223,7 +306,8 @@ async def ws_logs(ws: WebSocket, token: str = Query(default="")):
     Streams: { timestamp, level, message, trace_id, job_id, project_id }
     Connect with: ws://host/ws/logs?token=<jwt>
     """
-    if not await _authenticate_ws(ws, token):
+    payload = await _authenticate_ws(ws, token)
+    if not payload:
         return
     await log_manager.connect("logs", ws)
 

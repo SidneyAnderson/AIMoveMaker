@@ -13,6 +13,7 @@ import { listJobs } from '@/api/jobs'
 import { toast } from 'sonner'
 import CommandPalette from './CommandPalette'
 import NotificationsDropdown from './NotificationsDropdown'
+import { useWebSocket } from '@/hooks/useWebSocket'
 
 interface AppShellProps {
   children: ReactNode
@@ -76,6 +77,9 @@ export default function AppShell({ children }: AppShellProps) {
   const [batchName, setBatchName] = useState('')
   const [selectedJobIds, setSelectedJobIds] = useState<string[]>([])
 
+  // Real-time collaboration presence (#9)
+  const [onlineUsers, setOnlineUsers] = useState<any[]>([])
+
   const currentProjectId = useProjectStore((s) => s.currentProjectId)
 
   const { data: snapshotsData } = useQuery({
@@ -126,6 +130,32 @@ export default function AppShell({ children }: AppShellProps) {
     },
     onError: () => toast.error('Failed to create batch'),
   })
+
+  // Project presence + cursor WS (collaboration #9)
+  // Only active when inside a project
+  const projectWsUrl = currentProjectId ? `/ws/projects/${currentProjectId}` : ''
+  const { send: sendProjectMessage } = useWebSocket({
+    url: projectWsUrl,
+    onMessage: (data: any) => {
+      if (data?.type === 'presence_update') {
+        setOnlineUsers(data.users || [])
+      }
+      // Cursor messages are consumed by the views (Timeline, etc.) via their own listeners if needed.
+      // For now we just keep the connection alive here for presence.
+    },
+    enabled: !!currentProjectId,
+  })
+
+  // On project change or mount, announce join (backend auto-adds on connect, but explicit helps)
+  useEffect(() => {
+    if (currentProjectId && sendProjectMessage) {
+      // Small delay to ensure WS is open
+      const t = setTimeout(() => {
+        sendProjectMessage({ type: 'presence:join' })
+      }, 300)
+      return () => clearTimeout(t)
+    }
+  }, [currentProjectId, sendProjectMessage])
 
   // Reset batch create form when modal closes
   useEffect(() => {
@@ -240,11 +270,23 @@ export default function AppShell({ children }: AppShellProps) {
               </button>
             )}
 
-            {/* Real-time collaboration presence (advanced) */}
+            {/* Real-time collaboration presence (#9) */}
             {currentProjectId && (
-              <div className="flex items-center gap-1 px-2 py-0.5 text-[10px] bg-bg-base border border-border rounded text-text-muted" title="Real-time presence (WebSocket)">
+              <div className="relative group flex items-center gap-1 px-2 py-0.5 text-[10px] bg-bg-base border border-border rounded text-text-muted hover:text-text-primary cursor-default" title="Users currently in this project">
                 <Users className="w-3 h-3" />
-                <span>Online</span>
+                <span>{onlineUsers.length || 1}</span>
+
+                {/* Hover dropdown with user list */}
+                {onlineUsers.length > 0 && (
+                  <div className="absolute right-0 top-full mt-1 hidden group-hover:block z-50 min-w-[160px] bg-bg-elevated border border-border rounded shadow-xl text-xs py-1">
+                    {onlineUsers.map((u: any, idx: number) => (
+                      <div key={idx} className="px-3 py-1 flex items-center gap-2 hover:bg-bg-subtle">
+                        <div className="w-2 h-2 rounded-full bg-success" />
+                        <span className="truncate">{u.full_name || u.email}</span>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             )}
             <span className="text-sm text-text-secondary">
