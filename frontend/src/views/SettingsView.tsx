@@ -2,7 +2,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/api/client'
 import { useState, useEffect } from 'react'
 import { getNotificationPreferences, updateNotificationPreferences } from '@/api/notifications'
-import { Settings, Pencil, Check, X, Cpu, HardDrive, Gauge, AlertTriangle, CheckCircle, RefreshCw, Play } from 'lucide-react'
+import { Settings, Pencil, Check, X, Cpu, HardDrive, Gauge, AlertTriangle, CheckCircle, RefreshCw, Play, BarChart3, Clock, TrendingUp, XCircle } from 'lucide-react'
 import { toast } from 'sonner'
 import { useProjectStore } from '@/stores/projectStore'
 import { listKeyframes } from '@/api/storyboard'
@@ -107,6 +107,65 @@ export default function SettingsView() {
     queryFn: () => listJobs({ project_id: currentProjectId! }),
     enabled: !!currentProjectId,
   })
+
+  // Advanced Analytics computations (client-side from existing data, no new backend)
+  const analytics = (() => {
+    const jobs: any[] = jobsData?.items || []
+    if (jobs.length === 0) return null
+
+    const total = jobs.length
+    const done = jobs.filter(j => j.status === 'done').length
+    const failed = jobs.filter(j => j.status === 'failed').length
+    const cancelled = jobs.filter(j => j.status === 'cancelled').length
+    const running = jobs.filter(j => j.status === 'running').length
+    const queued = jobs.filter(j => j.status === 'queued').length
+
+    const successRate = total > 0 ? Math.round((done / (done + failed || 1)) * 100) : 0
+
+    // Duration calc for completed jobs (in minutes)
+    const completedJobs = jobs.filter(j => j.status === 'done' && j.started_at && j.completed_at)
+    let avgDurationMin = 0
+    if (completedJobs.length > 0) {
+      const durations = completedJobs.map(j => {
+        const start = new Date(j.started_at).getTime()
+        const end = new Date(j.completed_at).getTime()
+        return (end - start) / 1000 / 60
+      })
+      avgDurationMin = Math.round(durations.reduce((a, b) => a + b, 0) / durations.length)
+    }
+
+    // By type
+    const byType: Record<string, number> = {}
+    jobs.forEach(j => {
+      byType[j.type] = (byType[j.type] || 0) + 1
+    })
+
+    // By status
+    const byStatus = { queued, running, done, failed, cancelled }
+
+    // By GPU target
+    const local = jobs.filter(j => j.gpu_target === 'local').length
+    const vastai = jobs.filter(j => j.gpu_target === 'vastai').length
+
+    // Recent activity (last 10 jobs by queued time)
+    const recent = [...jobs]
+      .sort((a, b) => new Date(b.queued_at).getTime() - new Date(a.queued_at).getTime())
+      .slice(0, 10)
+
+    // Total estimated VRAM requested
+    const totalVramEst = jobs.reduce((sum, j) => sum + (j.vram_estimate_mb || 0), 0)
+
+    // Failure reasons
+    const failureReasons: Record<string, number> = {}
+    jobs.filter(j => j.status === 'failed' && j.error_code).forEach(j => {
+      failureReasons[j.error_code] = (failureReasons[j.error_code] || 0) + 1
+    })
+
+    return {
+      total, done, failed, successRate, avgDurationMin,
+      byType, byStatus, local, vastai, recent, totalVramEst, failureReasons
+    }
+  })()
 
   const { data, isLoading } = useQuery({
     queryKey: ['settings'],
@@ -475,27 +534,137 @@ export default function SettingsView() {
         </div>
       </div>
 
-      {/* Basic Project Analytics (advanced exposure) */}
+      {/* Advanced Project Analytics (gap #8) */}
       <div className="mt-8 bg-bg-surface border border-border rounded-card p-4">
-        <h2 className="text-sm font-medium text-text-primary mb-3">Project Analytics</h2>
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <BarChart3 className="w-4 h-4 text-accent" />
+            <h2 className="text-sm font-medium text-text-primary">Project Analytics</h2>
+          </div>
+          <button
+            onClick={() => {
+              queryClient.invalidateQueries({ queryKey: ['jobs-count', currentProjectId] })
+              queryClient.invalidateQueries({ queryKey: ['keyframes-count', currentProjectId] })
+            }}
+            className="flex items-center gap-1 px-2 py-0.5 text-xs border border-border rounded hover:bg-bg-subtle"
+          >
+            <RefreshCw className="w-3 h-3" /> Refresh
+          </button>
+        </div>
+
         {!currentProjectId ? (
           <div className="text-xs text-text-muted">Open a project to see stats.</div>
+        ) : !analytics ? (
+          <div className="text-xs text-text-muted">No jobs yet for this project.</div>
         ) : (
-          <div className="grid grid-cols-2 gap-x-6 gap-y-2 text-sm">
-            <div className="text-text-muted">Keyframes</div>
-            <div className="font-mono text-xs text-text-primary">{keyframesData?.items?.length ?? '—'}</div>
+          <div className="space-y-5">
+            {/* KPI Row */}
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+              <div className="bg-bg-base border border-border rounded p-2">
+                <div className="text-[10px] text-text-muted">Total Jobs</div>
+                <div className="text-2xl font-semibold text-text-primary font-mono">{analytics.total}</div>
+              </div>
+              <div className="bg-bg-base border border-border rounded p-2">
+                <div className="text-[10px] text-text-muted flex items-center gap-1"><CheckCircle className="w-3 h-3" /> Success Rate</div>
+                <div className={`text-2xl font-semibold font-mono ${analytics.successRate > 85 ? 'text-success' : analytics.successRate > 60 ? 'text-yellow-400' : 'text-error'}`}>
+                  {analytics.successRate}%
+                </div>
+              </div>
+              <div className="bg-bg-base border border-border rounded p-2">
+                <div className="text-[10px] text-text-muted flex items-center gap-1"><Clock className="w-3 h-3" /> Avg Duration</div>
+                <div className="text-2xl font-semibold text-text-primary font-mono">{analytics.avgDurationMin || '—'}<span className="text-xs">min</span></div>
+              </div>
+              <div className="bg-bg-base border border-border rounded p-2">
+                <div className="text-[10px] text-text-muted">Active / Queued</div>
+                <div className="text-xl font-semibold text-accent font-mono">{analytics.byStatus.running + analytics.byStatus.queued}</div>
+              </div>
+              <div className="bg-bg-base border border-border rounded p-2">
+                <div className="text-[10px] text-text-muted">Total VRAM Est.</div>
+                <div className="text-xl font-semibold text-text-primary font-mono">{Math.round(analytics.totalVramEst / 1024)} GB</div>
+              </div>
+            </div>
 
-            <div className="text-text-muted">Jobs (this project)</div>
-            <div className="font-mono text-xs text-text-primary">{jobsData?.items?.length ?? '—'}</div>
+            {/* Status Breakdown - CSS Bar Chart */}
+            <div>
+              <div className="text-xs text-text-muted mb-1.5 flex items-center gap-1"><TrendingUp className="w-3 h-3" /> Status Breakdown</div>
+              {Object.entries(analytics.byStatus).map(([status, count]) => {
+                const pct = Math.round((count / analytics.total) * 100)
+                const color = status === 'done' ? 'bg-success' : status === 'failed' ? 'bg-error' : status === 'running' ? 'bg-accent' : 'bg-text-muted'
+                return (
+                  <div key={status} className="flex items-center gap-2 text-xs mb-1">
+                    <div className="w-16 text-right text-text-muted capitalize">{status}</div>
+                    <div className="flex-1 h-3 bg-bg-subtle rounded overflow-hidden">
+                      <div className={`h-3 ${color} transition-all`} style={{ width: `${pct}%` }} />
+                    </div>
+                    <div className="w-12 font-mono text-right text-text-primary">{count} <span className="text-text-muted">({pct}%)</span></div>
+                  </div>
+                )
+              })}
+            </div>
 
-            <div className="text-text-muted">Completed Jobs</div>
-            <div className="font-mono text-xs text-text-primary">
-              {jobsData?.items?.filter((j: any) => j.status === 'done').length ?? '—'}
+            {/* Type Breakdown */}
+            <div>
+              <div className="text-xs text-text-muted mb-1.5">By Job Type</div>
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2 text-xs">
+                {Object.entries(analytics.byType).sort((a, b) => b[1] - a[1]).map(([type, count]) => {
+                  const pct = Math.round((count / analytics.total) * 100)
+                  return (
+                    <div key={type} className="flex justify-between bg-bg-base border border-border px-2 py-1 rounded font-mono">
+                      <span className="text-text-primary truncate">{type}</span>
+                      <span className="text-text-muted">{count} <span className="opacity-60">({pct}%)</span></span>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* GPU Target + Failures */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div>
+                <div className="text-xs text-text-muted mb-1.5">GPU Target</div>
+                <div className="flex gap-2 text-xs">
+                  <div className="flex-1 bg-bg-base border border-border rounded p-2">
+                    Local: <span className="font-mono text-accent">{analytics.local}</span>
+                  </div>
+                  <div className="flex-1 bg-bg-base border border-border rounded p-2">
+                    Vast.ai: <span className="font-mono text-accent">{analytics.vastai}</span>
+                  </div>
+                </div>
+              </div>
+
+              {Object.keys(analytics.failureReasons).length > 0 && (
+                <div>
+                  <div className="text-xs text-text-muted mb-1.5 flex items-center gap-1"><XCircle className="w-3 h-3 text-error" /> Top Failure Reasons</div>
+                  <div className="text-xs space-y-1">
+                    {Object.entries(analytics.failureReasons).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([code, count]) => (
+                      <div key={code} className="flex justify-between bg-error/10 border border-error/30 px-2 py-0.5 rounded font-mono">
+                        <span className="truncate">{code}</span>
+                        <span>{count}</span>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Recent Activity Mini Timeline */}
+            <div>
+              <div className="text-xs text-text-muted mb-1.5">Recent Activity (last {analytics.recent.length} jobs)</div>
+              <div className="flex gap-px h-6 bg-bg-subtle rounded overflow-hidden">
+                {analytics.recent.map((j, idx) => {
+                  const color = j.status === 'done' ? 'bg-success' : j.status === 'failed' ? 'bg-error' : j.status === 'running' ? 'bg-accent' : 'bg-text-muted/60'
+                  return <div key={idx} className={`${color} flex-1`} title={`${j.type} • ${j.status}`} />
+                })}
+              </div>
+              <div className="text-[10px] text-text-muted mt-1 flex justify-between">
+                <span>Oldest</span><span>Newest (most recent on right)</span>
+              </div>
             </div>
           </div>
         )}
+
         <div className="text-[10px] text-text-muted mt-3">
-          Basic stats from current project. Full dashboard coming soon.
+          All metrics computed client-side from the job list. Success rate excludes cancelled jobs.
         </div>
       </div>
     </div>
