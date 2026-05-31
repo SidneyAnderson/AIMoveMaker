@@ -1,11 +1,12 @@
 import { useParams } from 'react-router-dom'
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { listKeyframes, createKeyframe, deleteKeyframe, updateKeyframe } from '@/api/storyboard'
+import api from '@/api/client'
 import { getProject, listMembers, updateProject } from '@/api/projects'
 import { useProjectStore } from '@/stores/projectStore'
 import { useAuthStore } from '@/stores/authStore'
 import { useEffect, useState } from 'react'
-import { ImagePlus, Wand2, Send, Plus, Trash2, X, Save, History, Search } from 'lucide-react'
+import { ImagePlus, Wand2, Send, Plus, Trash2, X, Save, History, Search, Sliders, Layers } from 'lucide-react'
 import CanvasEditor from '@/components/canvas/CanvasEditor'
 import { getAssetDownloadUrl } from '@/api/assets'
 import { createTemplate, listHistory, listTemplates, applyTemplate, createHistory } from '@/api/prompts'
@@ -19,6 +20,12 @@ interface KeyframeFormData {
   cfg_scale: number
   width: number
   height: number
+  // Advanced ControlNet / LoRA editors (#10)
+  cn_enabled: boolean
+  cn_type: string
+  cn_strength: number
+  cn_control_asset_id: string
+  lora_stack: Array<{ lora_id: string; weight: number }>
 }
 
 const defaultForm: KeyframeFormData = {
@@ -29,6 +36,11 @@ const defaultForm: KeyframeFormData = {
   cfg_scale: 7.5,
   width: 512,
   height: 512,
+  cn_enabled: false,
+  cn_type: 'canny',
+  cn_strength: 1.0,
+  cn_control_asset_id: '',
+  lora_stack: [],
 }
 
 export default function StoryboardView() {
@@ -105,6 +117,15 @@ export default function StoryboardView() {
     enabled: !!projectId,
   })
 
+  // LoRA registry for advanced editor (#10)
+  const { data: lorasData } = useQuery({
+    queryKey: ['loras'],
+    queryFn: async () => {
+      const res = await api.get('/loras/')
+      return res.data
+    },
+  })
+
   const keyframes: any[] = data?.items || []
   const selectedKeyframe = keyframes.find((kf: any) => kf.id === selectedKeyframeId)
 
@@ -117,6 +138,17 @@ export default function StoryboardView() {
       if (formData.cfg_scale) payload.cfg_scale = formData.cfg_scale
       if (formData.width) payload.width = formData.width
       if (formData.height) payload.height = formData.height
+
+      // Advanced ControlNet / LoRA (#10)
+      if (formData.cn_enabled) {
+        payload.cn_enabled = true
+        payload.cn_type = formData.cn_type
+        payload.cn_strength = formData.cn_strength
+        if (formData.cn_control_asset_id) payload.cn_control_asset_id = formData.cn_control_asset_id
+      }
+      if (formData.lora_stack.length > 0) {
+        payload.lora_stack = formData.lora_stack
+      }
       return createKeyframe(projectId!, payload)
     },
     onSuccess: (newKf: any) => {
@@ -279,6 +311,138 @@ export default function StoryboardView() {
                     onChange={(e) => setForm({ ...form, height: parseInt(e.target.value) || 0 })}
                     className="w-full px-3 py-2 bg-bg-base border border-border rounded-btn text-sm text-text-primary"
                   />
+                </div>
+              </div>
+
+              {/* === Advanced ControlNet / LoRA Editors (#10) === */}
+              <div className="col-span-2 border border-border rounded p-3 bg-bg-base space-y-3">
+                {/* LoRA Stack */}
+                <div>
+                  <div className="flex items-center justify-between mb-1">
+                    <label className="text-xs text-text-secondary flex items-center gap-1"><Layers className="w-3 h-3" /> LoRA Stack</label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const firstLora = lorasData?.items?.[0]
+                        if (firstLora) {
+                          setForm({
+                            ...form,
+                            lora_stack: [...form.lora_stack, { lora_id: firstLora.id, weight: 0.8 }]
+                          })
+                        } else {
+                          // Fallback manual entry
+                          setForm({ ...form, lora_stack: [...form.lora_stack, { lora_id: '', weight: 0.8 }] })
+                        }
+                      }}
+                      className="text-[10px] px-2 py-0.5 border border-border rounded hover:bg-bg-subtle"
+                    >
+                      + Add LoRA
+                    </button>
+                  </div>
+
+                  {form.lora_stack.length > 0 && (
+                    <div className="space-y-2">
+                      {form.lora_stack.map((entry, idx) => (
+                        <div key={idx} className="flex gap-2 items-center text-xs">
+                          <select
+                            value={entry.lora_id}
+                            onChange={(e) => {
+                              const newStack = [...form.lora_stack]
+                              newStack[idx] = { ...newStack[idx], lora_id: e.target.value }
+                              setForm({ ...form, lora_stack: newStack })
+                            }}
+                            className="flex-1 bg-bg-surface border border-border rounded px-2 py-1 text-xs"
+                          >
+                            <option value="">Select LoRA...</option>
+                            {(lorasData?.items || []).map((l: any) => (
+                              <option key={l.id} value={l.id}>{l.name || l.id} ({l.architecture || 'sd'})</option>
+                            ))}
+                          </select>
+                          <input
+                            type="range"
+                            min="0"
+                            max="2"
+                            step="0.1"
+                            value={entry.weight}
+                            onChange={(e) => {
+                              const newStack = [...form.lora_stack]
+                              newStack[idx] = { ...newStack[idx], weight: parseFloat(e.target.value) }
+                              setForm({ ...form, lora_stack: newStack })
+                            }}
+                            className="w-24"
+                          />
+                          <span className="w-8 font-mono text-center">{entry.weight.toFixed(1)}</span>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const newStack = form.lora_stack.filter((_, i) => i !== idx)
+                              setForm({ ...form, lora_stack: newStack })
+                            }}
+                            className="text-red-400 hover:text-red-500"
+                          >
+                            <Trash2 className="w-3 h-3" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                  {form.lora_stack.length === 0 && (
+                    <div className="text-[10px] text-text-muted">No LoRAs added (optional)</div>
+                  )}
+                </div>
+
+                {/* ControlNet */}
+                <div>
+                  <label className="flex items-center gap-2 text-xs text-text-secondary mb-1">
+                    <input
+                      type="checkbox"
+                      checked={form.cn_enabled}
+                      onChange={(e) => setForm({ ...form, cn_enabled: e.target.checked })}
+                    />
+                    <Sliders className="w-3 h-3" /> Use ControlNet
+                  </label>
+
+                  {form.cn_enabled && (
+                    <div className="grid grid-cols-2 gap-2 mt-2 text-xs">
+                      <div>
+                        <label className="block text-[10px] text-text-muted mb-0.5">Type</label>
+                        <select
+                          value={form.cn_type}
+                          onChange={(e) => setForm({ ...form, cn_type: e.target.value })}
+                          className="w-full bg-bg-surface border border-border rounded px-2 py-1"
+                        >
+                          <option value="canny">Canny (edges)</option>
+                          <option value="depth">Depth</option>
+                          <option value="pose">OpenPose</option>
+                          <option value="reference">Reference (IP-Adapter)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-[10px] text-text-muted mb-0.5">Strength</label>
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="range"
+                            min="0"
+                            max="2"
+                            step="0.1"
+                            value={form.cn_strength}
+                            onChange={(e) => setForm({ ...form, cn_strength: parseFloat(e.target.value) })}
+                            className="flex-1"
+                          />
+                          <span className="w-8 font-mono text-center">{form.cn_strength.toFixed(1)}</span>
+                        </div>
+                      </div>
+                      <div className="col-span-2">
+                        <label className="block text-[10px] text-text-muted mb-0.5">Control Image Asset ID (optional)</label>
+                        <input
+                          value={form.cn_control_asset_id}
+                          onChange={(e) => setForm({ ...form, cn_control_asset_id: e.target.value })}
+                          placeholder="Asset ID or upload via Canvas first"
+                          className="w-full bg-bg-surface border border-border rounded px-2 py-1 text-xs"
+                        />
+                      </div>
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
