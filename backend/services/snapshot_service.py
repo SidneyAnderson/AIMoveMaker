@@ -56,10 +56,13 @@ async def create_snapshot(
 ) -> Snapshot:
     """Create a tiered snapshot (auto, manual, major, handoff) with auto-versioning.
 
-    Current auto-triggers (as of full 13-gap closure):
+    Current auto-triggers (as of full 13-gap closure + QA):
     - Handoff (project_service)
     - Render complete (generation_tasks)
     - Batch completion (generation_tasks _update_batch_counters)
+
+    Full regression QA confirmed all snapshot flows (create/restore) remain stable.
+    See README "Testing & QA" for details.
     """
     base = os.path.join(settings.STORAGE_BASE_PATH, "snapshots", project_id)
     subdir = "checkpoints" if snap_type == "checkpoint" else (
