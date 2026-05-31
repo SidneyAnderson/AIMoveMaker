@@ -319,8 +319,7 @@ export default function AppShell({ children }: AppShellProps) {
             <div className="p-4">
               <div className="flex gap-2 mb-3">
                 <button onClick={() => createSnapMutation.mutate('manual')} disabled={createSnapMutation.isPending} className="text-xs px-3 py-1 border border-border rounded hover:bg-bg-subtle">+ Manual</button>
-                <button onClick={() => createSnapMutation.mutate('major')} disabled={createSnapMutation.isPending} className="text-xs px-3 py-1 border border-border rounded hover:bg-bg-subtle">+ Major</button>
-                <button onClick={() => createSnapMutation.mutate('major')} disabled={createSnapMutation.isPending} className="text-xs px-3 py-1 border border-accent text-accent rounded hover:bg-accent/10">Create Major Snapshot</button>
+                <button onClick={() => createSnapMutation.mutate('major')} disabled={createSnapMutation.isPending} className="text-xs px-3 py-1 border border-accent text-accent rounded hover:bg-accent/10">+ Major Snapshot</button>
                 <select
                   value={snapshotTierFilter}
                   onChange={(e) => setSnapshotTierFilter(e.target.value)}
@@ -349,9 +348,14 @@ export default function AppShell({ children }: AppShellProps) {
                       </div>
                       <div className="flex gap-2">
                         <button
-                          onClick={() => restoreSnapMutation.mutate(s.id)}
+                          onClick={() => {
+                            if (confirm(`Restore to "${s.label}"? This will overwrite current storyboard + timeline (destructive).`)) {
+                              restoreSnapMutation.mutate(s.id)
+                            }
+                          }}
                           disabled={restoreSnapMutation.isPending}
                           className="text-xs px-2 py-0.5 bg-accent text-accent-fg rounded hover:bg-accent-hover"
+                          title="Destructive: overwrites current state"
                         >
                           Restore
                         </button>
@@ -363,7 +367,7 @@ export default function AppShell({ children }: AppShellProps) {
             </div>
 
             <div className="px-4 py-2 text-[10px] border-t border-border bg-bg-surface text-text-muted">
-              Tiered snapshots provide versioned checkpoints (auto on key events, manual on demand). Restore overwrites current storyboard/timeline state.
+              Tiered snapshots: auto on handoff/render/batch-complete + manual/major. Restore is destructive (overwrites storyboard + timeline). Use for safe checkpoints.
             </div>
           </div>
         </div>

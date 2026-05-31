@@ -74,7 +74,7 @@ async def create_snapshot(
     filename = f"snapshot_{tier}_v{version}_{ts}.json"
     path = os.path.join(snap_dir, filename)
 
-    auto_label = label or f"{tier.title()} {snap_type} v{version}"
+    auto_label = label or f"{tier.title()} {snap_type} v{version} ({ts})"
 
     # Serialize project state
     # 1. Storyboard + keyframes

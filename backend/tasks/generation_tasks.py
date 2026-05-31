@@ -8,6 +8,7 @@ Each task:
   5. Updates Job status to 'done' or 'failed'
   6. Handles retries up to max_retries
 """
+import asyncio
 import json
 import os
 import traceback
@@ -100,6 +101,18 @@ def _update_batch_counters(job_id: str, terminal_status: str) -> None:
 
             session.commit()
             logger.info(f"Batch {batch.id} counters updated: {done}/{total} done, {failed} failed, status={batch.status}")
+
+            # Extra polish: auto major snapshot when a batch completes successfully (#12)
+            if batch.status == "done" and terminal_status == "done":
+                try:
+                    from backend.services.snapshot_service import create_snapshot
+                    asyncio.run(create_snapshot(
+                        session, batch.project_id, job.user_id,
+                        "auto_event", tier="major",
+                        label=f"Batch {batch.id[:8]} complete"
+                    ))
+                except Exception:
+                    pass  # best effort
     except Exception as e:
         logger.warning(f"Failed to update batch counters for job {job_id}: {e}")
 
