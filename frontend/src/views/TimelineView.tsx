@@ -248,10 +248,6 @@ export default function TimelineView() {
   // Disable editing controls when locked
   const renderDisabled = isTimelineLocked || !canEditTimeline
 
-  // Stub for legacy drag/trim references (pre-existing timeline depth work; non-fatal for compile)
-  const [draggingClip, setDraggingClip] = useState<any>(null)
-  const startClipDrag = (e: any, clip?: any, trackId?: any) => { setDraggingClip(clip || null); /* full impl in prior timeline work */ }
-
   useEffect(() => {
     if (projectId) {
       setCurrentProject(projectId)
@@ -386,7 +382,7 @@ export default function TimelineView() {
 
   // Allow scrubbing when mouse is over the entire timeline clip area (not just ruler)
   const handleTimelineMouseMove = (e: React.MouseEvent) => {
-    if (e.buttons === 1 && !draggingClip && !resizing) {
+    if (e.buttons === 1 && !draggingWholeClip && !resizing) {
       updatePlayheadFromClientX(e.clientX)
     }
     if (draggingWholeClip) {
@@ -395,7 +391,7 @@ export default function TimelineView() {
   }
 
   const handleTimelineMouseDown = (e: React.MouseEvent) => {
-    if (!draggingClip && !resizing) {
+    if (!draggingWholeClip && !resizing) {
       updatePlayheadFromClientX(e.clientX)
     }
   }
@@ -999,7 +995,7 @@ export default function TimelineView() {
                                 style={{ 
                                   left, 
                                   width,
-                                  opacity: isClipDragging ? 0.3 : (draggingClip?.clipId === clip.id ? 0.6 : 1) 
+                                  opacity: isClipDragging ? 0.3 : (draggingWholeClip?.clipId === clip.id ? 0.6 : 1) 
                                 }}
                                 title={clip.name || clip.id}
                                 onMouseDown={(e) => startWholeClipDrag(e, clip, track.id)}

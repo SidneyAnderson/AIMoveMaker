@@ -326,7 +326,7 @@ export default function SettingsView() {
           ))}
         </div>
         <div className="text-[10px] text-text-muted mt-3">
-          Changes are saved locally. Full server-side preferences coming soon.
+          Notification preferences are persisted server-side (email + in-app channels).
         </div>
       </div>
 
