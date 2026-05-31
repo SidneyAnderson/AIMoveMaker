@@ -70,7 +70,10 @@ def create_app() -> FastAPI:
         notifications,
         oauth,
         projects,
+        prompt_history,
+        prompt_templates,
         settings,
+        hardware,
         snapshots,
         storyboard,
         timeline,
@@ -101,6 +104,9 @@ def create_app() -> FastAPI:
     api.include_router(snapshots.router)
     api.include_router(notifications.router)
     api.include_router(websockets.router)
+    api.include_router(prompt_templates.router)
+    api.include_router(prompt_history.router)
+    api.include_router(hardware.router)
 
     app.include_router(api)
 

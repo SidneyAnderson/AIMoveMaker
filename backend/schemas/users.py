@@ -41,3 +41,12 @@ class UserListResponse(BaseModel):
     page: int = 1
     page_size: int = 100
     pages: int = 1
+
+
+# Notification Preferences (for #3 completion)
+class NotificationPreferencesResponse(BaseModel):
+    preferences: dict
+
+
+class NotificationPreferencesUpdate(BaseModel):
+    preferences: dict

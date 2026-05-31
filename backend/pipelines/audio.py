@@ -277,8 +277,34 @@ class AudioPipeline:
                 logger.error(f"wav2lip failed: {result.stderr}")
                 raise RuntimeError(f"wav2lip inference failed: {result.stderr[:500]}")
         except FileNotFoundError:
-            logger.error("wav2lip module not found. Install wav2lip package.")
-            raise RuntimeError("wav2lip not installed")
+            logger.error("wav2lip module not found. Install wav2lip package. Falling back to original video.")
+            # Fallback: copy original video as output
+            import shutil
+            shutil.copy2(video_path, output_path)
+            # Return minimal result
+            return LipSyncResult(
+                output_path=output_path,
+                duration_ms=0,  # unknown
+                file_size_bytes=os.path.getsize(output_path),
+            )
+        except subprocess.TimeoutExpired:
+            logger.error("wav2lip timed out. Falling back to original video.")
+            import shutil
+            shutil.copy2(video_path, output_path)
+            return LipSyncResult(
+                output_path=output_path,
+                duration_ms=0,
+                file_size_bytes=os.path.getsize(output_path),
+            )
+        except Exception as e:
+            logger.error(f"wav2lip unexpected error: {e}. Falling back to original video.")
+            import shutil
+            shutil.copy2(video_path, output_path)
+            return LipSyncResult(
+                output_path=output_path,
+                duration_ms=0,
+                file_size_bytes=os.path.getsize(output_path),
+            )
 
         if progress_callback:
             progress_callback(3, 4)

@@ -178,6 +178,40 @@ async def ws_project_events(ws: WebSocket, project_id: str, token: str = Query(d
 
 
 # ---------------------------------------------------------------------------
+# WS /ws/notifications (user-level real-time notifs)
+# ---------------------------------------------------------------------------
+
+@router.websocket("/ws/notifications")
+async def ws_user_notifications(ws: WebSocket, token: str = Query(default=""), user_id: str = Query(default="")):
+    """Real-time notifications for the authenticated user.
+
+    Subscribes to Redis pub/sub channel user:{user_id}:notifications.
+    Streams: { type: "notification", notification, timestamp }
+    Connect with: ws://host/ws/notifications?token=<jwt>&user_id=<uid>
+    """
+    if not await _authenticate_ws(ws, token):
+        return
+    if not user_id:
+        # Fallback: allow without explicit uid (client can filter)
+        user_id = "broadcast"
+    channel = f"user:{user_id}:notifications"
+    await job_manager.connect(channel, ws)  # reuse manager ok for notifs
+
+    sub_task = asyncio.create_task(_redis_subscriber(channel, ws, job_manager))
+
+    try:
+        while True:
+            data = await ws.receive_text()
+            if data == "ping":
+                await ws.send_json({"type": "pong", "timestamp": datetime.now(timezone.utc).isoformat()})
+    except WebSocketDisconnect:
+        pass
+    finally:
+        sub_task.cancel()
+        job_manager.disconnect(channel, ws)
+
+
+# ---------------------------------------------------------------------------
 # WS /ws/logs
 # ---------------------------------------------------------------------------
 
@@ -254,3 +288,21 @@ async def publish_log_entry(
         await r.close()
     except Exception as e:
         logger.warning(f"Failed to publish log entry: {e}")
+
+
+async def publish_notification_event(user_id: str, notification: dict):
+    """Publish a notification event to Redis for WebSocket streaming to the user."""
+    try:
+        import redis.asyncio as aioredis
+
+        r = aioredis.from_url(settings.REDIS_URL)
+        data = json.dumps({
+            "type": "notification",
+            "user_id": user_id,
+            "notification": notification,
+            "timestamp": datetime.now(timezone.utc).isoformat(),
+        })
+        await r.publish(f"user:{user_id}:notifications", data)
+        await r.close()
+    except Exception as e:
+        logger.warning(f"Failed to publish notification event: {e}")

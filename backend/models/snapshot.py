@@ -20,6 +20,11 @@ class Snapshot(Base):
         Enum("auto_time", "auto_event", "manual", "checkpoint", name="snapshot_type_enum"),
         nullable=False,
     )
+    tier: Mapped[str] = mapped_column(
+        Enum("auto", "manual", "major", "handoff", name="snapshot_tier_enum"),
+        default="manual",
+        nullable=False,
+    )
     label: Mapped[str | None] = mapped_column(String(255), nullable=True)
     storage_path: Mapped[str] = mapped_column(Text, nullable=False)
     size_bytes: Mapped[int] = mapped_column(Integer, nullable=False)

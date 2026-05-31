@@ -229,6 +229,39 @@ async def create_handoff(
         project.state = "pending_return"
 
     await db.flush()
+
+    # Advanced notification hook for handoff (medium item as advanced feature)
+    try:
+        from backend.models.project_member import ProjectMember
+        from backend.models.user import User
+        from backend.services.notification_service import send_notification_to_user
+
+        target_role = "engineer" if direction == "creative_to_eng" else "creative"
+
+        members = await db.execute(
+            select(ProjectMember).where(
+                ProjectMember.project_id == project_id,
+                ProjectMember.role == target_role
+            )
+        )
+        for member in members.scalars():
+            target_user = await db.get(User, member.user_id)
+            if target_user:
+                await send_notification_to_user(
+                    db,
+                    target_user,
+                    "handoff_request" if direction == "creative_to_eng" else "return_request",
+                    project_id,
+                    {
+                        "handoff_id": handoff.id,
+                        "initiated_by": user_id,
+                        "direction": direction,
+                        "notes": notes,
+                    },
+                )
+    except Exception as e:
+        logger.warning(f"Failed to send handoff notification: {e}")
+
     return handoff
 
 
@@ -251,6 +284,14 @@ async def accept_handoff(db: AsyncSession, handoff_id: str, user_id: str) -> Han
         project.state = "creative_active"
 
     await db.flush()
+
+    # Auto-create tiered snapshot on handoff (low item polish)
+    try:
+        from backend.services.snapshot_service import create_snapshot
+        await create_snapshot(db, project_id, user_id, "auto_event", tier="handoff", label=f"Handoff {handoff.id[:8]}")
+    except Exception:
+        pass  # Non-fatal
+
     return handoff
 
 

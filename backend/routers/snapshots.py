@@ -19,8 +19,9 @@ async def list_snapshots_endpoint(
     project_id: str,
     current_user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
+    tier: str | None = None,
 ):
-    snapshots, total = await list_snapshots(db, project_id)
+    snapshots, total = await list_snapshots(db, project_id, tier=tier)
     return SnapshotListResponse(items=snapshots, total=total)
 
 
@@ -31,7 +32,7 @@ async def create_snapshot_endpoint(
     current_user: Annotated[User, Depends(get_current_active_user)],
     db: Annotated[AsyncSession, Depends(get_db)],
 ):
-    return await create_snapshot(db, project_id, current_user.id, body.type, body.label)
+    return await create_snapshot(db, project_id, current_user.id, body.type, body.tier, body.label)
 
 
 @router.post("/{snapshot_id}/restore", response_model=MessageResponse)

@@ -7,7 +7,14 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from backend.database import get_db
 from backend.dependencies import get_current_active_user, require_admin
 from backend.models.user import User
-from backend.schemas.users import UserCreate, UserListResponse, UserResponse, UserUpdate
+from backend.schemas.users import (
+    NotificationPreferencesResponse,
+    NotificationPreferencesUpdate,
+    UserCreate,
+    UserListResponse,
+    UserResponse,
+    UserUpdate,
+)
 from backend.services.user_service import (
     create_user_by_admin,
     deactivate_user,
@@ -89,3 +96,82 @@ async def delete_user_endpoint(
     user = await get_user_by_id(db, user_id)
     await deactivate_user(db, user)
     return None
+
+
+# ---------------------------------------------------------------------------
+# Notification Preferences (full backend support for #3)
+# ---------------------------------------------------------------------------
+
+
+
+
+@router.get("/me/notification-preferences", response_model=NotificationPreferencesResponse)
+async def get_my_notification_preferences(
+    current_user: Annotated[User, Depends(get_current_active_user)],
+):
+    """Get the current user's notification preferences (per-channel and per-type)."""
+    prefs = current_user.notify_settings or {}
+    # Provide sensible defaults if not set
+    defaults = {
+        "email": {
+            "job_completed": True,
+            "render_complete": True,
+            "handoff": True,
+            "approval": True,
+            "project_state_change": True,
+            "account_approved": True,
+        },
+        "in_app": {
+            "job_completed": True,
+            "render_complete": True,
+            "handoff": True,
+            "approval": True,
+            "project_state_change": True,
+            "account_approved": True,
+        },
+        "webhook": {
+            "job_completed": True,
+            "render_complete": True,
+            "handoff": True,
+            "approval": True,
+            "project_state_change": True,
+        },
+    }
+    # Merge user prefs over defaults
+    for channel in defaults:
+        user_channel = prefs.get(channel, {})
+        defaults[channel].update(user_channel)
+    return NotificationPreferencesResponse(preferences=defaults)
+
+
+@router.patch("/me/notification-preferences", response_model=NotificationPreferencesResponse)
+async def update_my_notification_preferences(
+    body: NotificationPreferencesUpdate,
+    current_user: Annotated[User, Depends(get_current_active_user)],
+    db: Annotated[AsyncSession, Depends(get_db)],
+):
+    """Update the current user's notification preferences."""
+    current_prefs = current_user.notify_settings or {}
+    new_prefs = body.preferences or {}
+
+    # Merge (only allow known channels/types for safety)
+    allowed_channels = {"email", "in_app", "webhook"}
+    allowed_types = {
+        "job_completed", "render_complete", "handoff", "approval",
+        "project_state_change", "account_approved"
+    }
+
+    for channel, types in new_prefs.items():
+        if channel not in allowed_channels:
+            continue
+        if channel not in current_prefs:
+            current_prefs[channel] = {}
+        for t, enabled in types.items():
+            if t in allowed_types:
+                current_prefs[channel][t] = bool(enabled)
+
+    current_user.notify_settings = current_prefs
+    await db.flush()
+
+    # Return merged result
+    return await get_my_notification_preferences(current_user)  # reuse for consistency

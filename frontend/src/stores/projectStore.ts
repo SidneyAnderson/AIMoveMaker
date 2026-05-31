@@ -2,6 +2,8 @@ import { create } from 'zustand'
 
 interface ProjectState {
   currentProjectId: string | null
+  currentProjectState: string | null
+  currentUserProjectRole: string | null   // 'creative' | 'engineer' | 'viewer' | 'admin'
   selectedKeyframeId: string | null
   selectedClipId: string | null
   panelPrefs: {
@@ -10,9 +12,11 @@ interface ProjectState {
     previewHeight: number
   }
   setCurrentProject: (id: string | null) => void
+  setProjectContext: (state: string | null, role: string | null) => void
   setSelectedKeyframe: (id: string | null) => void
   setSelectedClip: (id: string | null) => void
   setPanelPrefs: (prefs: Partial<ProjectState['panelPrefs']>) => void
+  clearProjectContext: () => void
 }
 
 const loadPanelPrefs = () => {
@@ -25,10 +29,13 @@ const loadPanelPrefs = () => {
 
 export const useProjectStore = create<ProjectState>()((set) => ({
   currentProjectId: null,
+  currentProjectState: null,
+  currentUserProjectRole: null,
   selectedKeyframeId: null,
   selectedClipId: null,
   panelPrefs: loadPanelPrefs(),
   setCurrentProject: (id) => set({ currentProjectId: id }),
+  setProjectContext: (state, role) => set({ currentProjectState: state, currentUserProjectRole: role }),
   setSelectedKeyframe: (id) => set({ selectedKeyframeId: id }),
   setSelectedClip: (id) => set({ selectedClipId: id }),
   setPanelPrefs: (prefs) =>
@@ -36,5 +43,12 @@ export const useProjectStore = create<ProjectState>()((set) => ({
       const updated = { ...state.panelPrefs, ...prefs }
       localStorage.setItem('aimm_panel_prefs', JSON.stringify(updated))
       return { panelPrefs: updated }
+    }),
+  clearProjectContext: () =>
+    set({
+      currentProjectState: null,
+      currentUserProjectRole: null,
+      selectedKeyframeId: null,
+      selectedClipId: null,
     }),
 }))

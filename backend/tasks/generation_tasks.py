@@ -59,6 +59,50 @@ def _publish_progress(
         logger.warning(f"Failed to publish progress for job {job_id}: {e}")
 
 
+def _update_batch_counters(job_id: str, terminal_status: str) -> None:
+    """Increment batch done/failed counts and recompute status when a job in a batch reaches terminal state.
+    Safe no-op if job has no batch_id. Uses sync engine (Celery context).
+    """
+    try:
+        from sqlalchemy import create_engine, select
+        from sqlalchemy.orm import Session
+        from backend.models.job import Job
+        from backend.models.batch import Batch
+
+        sync_url = SETTINGS.DATABASE_URL.replace("+aiosqlite", "").replace("+asyncpg", "+psycopg2")
+        engine = create_engine(sync_url)
+
+        with Session(engine) as session:
+            job = session.get(Job, job_id)
+            if not job or not job.batch_id:
+                return
+            batch = session.get(Batch, job.batch_id)
+            if not batch:
+                return
+
+            if terminal_status == "done":
+                batch.done_count = (batch.done_count or 0) + 1
+            elif terminal_status in ("failed", "cancelled"):
+                batch.failed_count = (batch.failed_count or 0) + 1
+
+            total = batch.job_count or 0
+            done = batch.done_count or 0
+            failed = batch.failed_count or 0
+            completed = done + failed
+
+            if total > 0 and completed >= total:
+                batch.status = "partial_failure" if failed > 0 else "done"
+            elif completed > 0:
+                batch.status = "running"
+            else:
+                batch.status = "pending"
+
+            session.commit()
+            logger.info(f"Batch {batch.id} counters updated: {done}/{total} done, {failed} failed, status={batch.status}")
+    except Exception as e:
+        logger.warning(f"Failed to update batch counters for job {job_id}: {e}")
+
+
 def _update_job_status(job_id: str, status: str, **extra_fields):
     """Update job status in database (synchronous, for use in Celery worker)."""
     try:
@@ -82,6 +126,12 @@ def _update_job_status(job_id: str, status: str, **extra_fields):
                 update(Job).where(Job.id == job_id).values(**values)
             )
             session.commit()
+
+            if status in ("done", "failed", "cancelled"):
+                try:
+                    _update_batch_counters(job_id, status)
+                except Exception:
+                    pass  # best-effort
     except Exception as e:
         logger.error(f"Failed to update job {job_id} status: {e}")
 
@@ -153,6 +203,46 @@ def _get_optimization_params() -> dict:
         return {"precision": "fp16", "use_xformers": False}
 
 
+def _resolve_asset_paths(params: dict) -> None:
+    """
+    If the caller passed asset IDs (preferred from modern UI flows like Canvas),
+    resolve them to real filesystem storage_path values using the sync DB session.
+
+    Mutates `params` in place, populating the classic *_path keys that the
+    pipelines and older flows expect.
+    """
+    try:
+        from sqlalchemy import create_engine, select
+        from sqlalchemy.orm import Session
+        from backend.models.asset import Asset
+
+        source_asset_id = params.get("source_asset_id") or params.get("source_image_asset_id")
+        mask_asset_id = params.get("mask_asset_id") or params.get("mask_image_asset_id")
+
+        if not source_asset_id and not mask_asset_id:
+            return
+
+        sync_url = SETTINGS.DATABASE_URL.replace("+aiosqlite", "").replace("+asyncpg", "+psycopg2")
+        engine = create_engine(sync_url)
+
+        with Session(engine) as session:
+            if source_asset_id and not params.get("source_image_path"):
+                asset = session.execute(
+                    select(Asset).where(Asset.id == source_asset_id)
+                ).scalar_one_or_none()
+                if asset:
+                    params["source_image_path"] = asset.storage_path
+
+            if mask_asset_id and not params.get("mask_image_path"):
+                asset = session.execute(
+                    select(Asset).where(Asset.id == mask_asset_id)
+                ).scalar_one_or_none()
+                if asset:
+                    params["mask_image_path"] = asset.storage_path
+    except Exception as e:
+        logger.warning(f"Could not resolve asset IDs to paths: {e}")
+
+
 # ---------------------------------------------------------------------------
 # Image Generation Task
 # ---------------------------------------------------------------------------
@@ -173,6 +263,8 @@ def image_generation_task(self, job_id: str, params: dict):
     logger.info(f"Image generation job {job_id} started", extra={"job_id": job_id})
     _update_job_status(job_id, "running")
     _publish_progress(job_id, 0, 0, params.get("steps", 30), "running")
+
+    _resolve_asset_paths(params)
 
     try:
         from backend.pipelines.image import get_image_pipeline
@@ -260,7 +352,62 @@ def image_generation_task(self, job_id: str, params: dict):
         _update_job_status(job_id, "done", progress_pct=100)
         _publish_progress(job_id, 100, params.get("steps", 30), params.get("steps", 30), "done")
 
+        # Advanced notification + prompt history (medium items as advanced features)
+        try:
+            import asyncio
+            from backend.models.user import User
+            from backend.services.notification_service import send_notification_to_user
+            from backend.services.prompt_service import create_history
+
+            sync_url = SETTINGS.DATABASE_URL.replace("+aiosqlite", "").replace("+asyncpg", "+psycopg2")
+            engine = create_engine(sync_url)
+            with Session(engine) as session:
+                job = session.get(Job, job_id)
+                if job:
+                    owner = session.get(User, job.user_id)
+                    if owner:
+                        # Run async notif + history in sync Celery task context
+                        async def _deliver():
+                            await send_notification_to_user(
+                                session, owner, "job_completed", job.project_id,
+                                {"job_id": job_id, "type": job.type, "asset_count": len(asset_ids)}
+                            )
+                            try:
+                                await create_history(session, job.user_id, {
+                                    "prompt_text": params.get("prompt", ""),
+                                    "negative_prompt": params.get("negative_prompt"),
+                                    "model_id": params.get("model_id"),
+                                    "params": {k: params.get(k) for k in ["steps", "cfg_scale", "width", "height", "mode"] if k in params},
+                                    "job_id": job_id,
+                                    "project_id": job.project_id,
+                                })
+                            except Exception:
+                                pass
+                        asyncio.run(_deliver())
+        except Exception as e:
+            logger.warning(f"Failed to send advanced notification for job {job_id}: {e}")
+
         logger.info(f"Image generation job {job_id} completed, {len(asset_ids)} assets created")
+
+        # Wire candidates back to keyframe for variation jobs (advanced carousel support)
+        try:
+            keyframe_id = params.get("keyframe_id")
+            variation_count = params.get("variation_count", 1)
+            if keyframe_id and variation_count > 1 and asset_ids:
+                from backend.models.keyframe import Keyframe
+                sync_url = SETTINGS.DATABASE_URL.replace("+aiosqlite", "").replace("+asyncpg", "+psycopg2")
+                engine = create_engine(sync_url)
+                with Session(engine) as session:
+                    kf = session.get(Keyframe, keyframe_id)
+                    if kf:
+                        # Set first asset as selected, rest as candidates
+                        kf.selected_asset_id = asset_ids[0]
+                        kf.candidate_asset_ids = asset_ids
+                        session.commit()
+                        logger.info(f"Updated keyframe {keyframe_id} with {len(asset_ids)} candidate assets")
+        except Exception as e:
+            logger.warning(f"Failed to wire candidates to keyframe: {e}")
+
         return {"job_id": job_id, "status": "done", "asset_ids": asset_ids}
 
     except Exception as e:
@@ -570,8 +717,91 @@ def render_task(self, job_id: str, params: dict):
         codec = params.get("codec", "libx264")
         bitrate = params.get("bitrate", "8M")
         audio_codec = params.get("audio_codec", "aac")
+        export_format = params.get("export_format", "mp4")
 
         import uuid
+
+        _publish_progress(job_id, 10, 10, 100, "running")
+
+        # --- PNG Sequence Export Path (item 5) ---
+        if export_format == "png_sequence":
+            seq_dir = os.path.join(output_dir, f"png_seq_{uuid.uuid4().hex[:12]}")
+            os.makedirs(seq_dir, exist_ok=True)
+
+            if not video_clips:
+                raise ValueError("No video clips provided for PNG sequence export")
+
+            concat_path = os.path.join(output_dir, f"_concat_{job_id}.txt")
+            with open(concat_path, "w") as f:
+                for clip in video_clips:
+                    clip_path = clip.get("asset_path", "")
+                    if clip_path and os.path.exists(clip_path):
+                        f.write(f"file '{clip_path}'\n")
+
+            width, height = resolution.split("x")
+            pattern = os.path.join(seq_dir, "frame_%04d.png")
+
+            cmd = [
+                "ffmpeg", "-y",
+                "-f", "concat", "-safe", "0", "-i", concat_path,
+                "-vf", f"scale={width}:{height},fps={fps}",
+                "-vsync", "vfr",
+                pattern,
+            ]
+
+            _publish_progress(job_id, 30, 30, 100, "running")
+
+            result = subprocess.run(cmd, capture_output=True, text=True, timeout=3600)
+            if result.returncode != 0:
+                raise RuntimeError(f"FFmpeg PNG sequence failed: {result.stderr[:500]}")
+
+            try:
+                os.remove(concat_path)
+            except Exception:
+                pass
+
+            _publish_progress(job_id, 80, 80, 100, "running")
+
+            # Package as ZIP for easy download
+            import zipfile
+            zip_filename = f"png_sequence_{uuid.uuid4().hex[:12]}.zip"
+            zip_path = os.path.join(output_dir, zip_filename)
+
+            with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zipf:
+                for root, dirs, files in os.walk(seq_dir):
+                    for file in files:
+                        if file.endswith('.png'):
+                            zipf.write(os.path.join(root, file), file)
+
+            # Cleanup raw PNGs
+            try:
+                import shutil
+                shutil.rmtree(seq_dir)
+            except Exception:
+                pass
+
+            file_size = os.path.getsize(zip_path)
+
+            asset_id = _create_asset_record(
+                job_id=job_id,
+                project_id=project_id,
+                asset_type="video",
+                asset_subtype="png_sequence",
+                storage_path=zip_path,
+                mime_type="application/zip",
+                file_size_bytes=file_size,
+                width=int(width),
+                height=int(height),
+                duration_ms=0,
+            )
+
+            _update_job_status(job_id, "done", progress_pct=100)
+            _publish_progress(job_id, 100, 100, 100, "done")
+
+            logger.info(f"PNG sequence export job {job_id} completed, asset {asset_id}")
+            return {"job_id": job_id, "status": "done", "asset_id": asset_id}
+
+        # --- Default MP4 render path ---
         filename = f"render_{uuid.uuid4().hex[:12]}.mp4"
         output_path = os.path.join(output_dir, filename)
 
@@ -657,6 +887,39 @@ def render_task(self, job_id: str, params: dict):
         _publish_progress(job_id, 100, 100, 100, "done")
 
         logger.info(f"Render job {job_id} completed, asset {asset_id}")
+
+        # Advanced notification for render complete
+        try:
+            import asyncio
+            from backend.models.user import User
+            from backend.services.notification_service import send_notification_to_user
+            sync_url = SETTINGS.DATABASE_URL.replace("+aiosqlite", "").replace("+asyncpg", "+psycopg2")
+            engine = create_engine(sync_url)
+            with Session(engine) as session:
+                job = session.get(Job, job_id)
+                if job:
+                    owner = session.get(User, job.user_id)
+                    if owner:
+                        asyncio.run(send_notification_to_user(
+                            session, owner, "render_complete", job.project_id,
+                            {"job_id": job_id, "asset_id": asset_id}
+                        ))
+        except Exception as e:
+            logger.warning(f"Failed to send render notification: {e}")
+
+        # Auto tiered snapshot on render complete (low item polish)
+        try:
+            import asyncio
+            from backend.services.snapshot_service import create_snapshot
+            sync_url = SETTINGS.DATABASE_URL.replace("+aiosqlite", "").replace("+asyncpg", "+psycopg2")
+            engine = create_engine(sync_url)
+            with Session(engine) as session:
+                job = session.get(Job, job_id)
+                if job:
+                    asyncio.run(create_snapshot(session, job.project_id, job.user_id, "auto_event", tier="major", label=f"Render {job_id[:8]}"))
+        except Exception:
+            pass
+
         return {"job_id": job_id, "status": "done", "asset_id": asset_id}
 
     except Exception as e:

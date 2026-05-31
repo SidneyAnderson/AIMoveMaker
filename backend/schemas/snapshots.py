@@ -6,6 +6,7 @@ from pydantic import BaseModel
 
 class SnapshotCreate(BaseModel):
     type: str = "manual"  # manual or checkpoint
+    tier: str = "manual"  # auto, manual, major, handoff
     label: str | None = None
 
 
@@ -13,6 +14,7 @@ class SnapshotResponse(BaseModel):
     id: str
     project_id: str
     type: str
+    tier: str
     label: str | None = None
     storage_path: str
     size_bytes: int

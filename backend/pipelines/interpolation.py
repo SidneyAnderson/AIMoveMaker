@@ -61,6 +61,9 @@ class RIFEPipeline:
                 "RIFE Python model not available, will use rife-ncnn-vulkan binary"
             )
             self._model = "binary"
+        except Exception as e:
+            logger.error(f"RIFE model load failed: {e}. Falling back to binary or no-op.")
+            self._model = "binary"
 
     def interpolate(
         self,
@@ -82,65 +85,96 @@ class RIFEPipeline:
             fps: Original video FPS
             progress_callback: Progress callback(current, total)
         """
-        self._load_model()
+        try:
+            self._load_model()
 
-        if progress_callback:
-            progress_callback(0, 100)
+            if progress_callback:
+                progress_callback(0, 100)
 
-        # Extract frames from input video
-        frames_dir = os.path.join(output_dir, f"_rife_frames_{uuid.uuid4().hex[:8]}")
-        os.makedirs(frames_dir, exist_ok=True)
+            # Extract frames from input video
+            frames_dir = os.path.join(output_dir, f"_rife_frames_{uuid.uuid4().hex[:8]}")
+            os.makedirs(frames_dir, exist_ok=True)
 
-        if progress_callback:
-            progress_callback(10, 100)
+            if progress_callback:
+                progress_callback(10, 100)
 
-        # Extract frames using ffmpeg
-        original_frame_count = self._extract_frames(input_video_path, frames_dir)
+            # Extract frames using ffmpeg
+            original_frame_count = self._extract_frames(input_video_path, frames_dir)
 
-        if progress_callback:
-            progress_callback(25, 100)
+            if progress_callback:
+                progress_callback(25, 100)
 
-        # Perform interpolation
-        interp_dir = os.path.join(output_dir, f"_rife_interp_{uuid.uuid4().hex[:8]}")
-        os.makedirs(interp_dir, exist_ok=True)
+            # Perform interpolation
+            interp_dir = os.path.join(output_dir, f"_rife_interp_{uuid.uuid4().hex[:8]}")
+            os.makedirs(interp_dir, exist_ok=True)
 
-        output_frame_count = self._run_interpolation(
-            frames_dir, interp_dir, multiplier, scene_cut_detect,
-            progress_callback=lambda p: progress_callback(25 + int(p * 0.5), 100) if progress_callback else None,
-        )
+            output_frame_count = self._run_interpolation(
+                frames_dir, interp_dir, multiplier, scene_cut_detect,
+                progress_callback=lambda p: progress_callback(25 + int(p * 0.5), 100) if progress_callback else None,
+            )
 
-        if progress_callback:
-            progress_callback(75, 100)
+            if progress_callback:
+                progress_callback(75, 100)
 
-        # Encode interpolated frames to video
-        output_fps = fps * multiplier
-        filename = f"{uuid.uuid4()}.mp4"
-        output_path = os.path.join(output_dir, filename)
+            # Encode interpolated frames to video
+            output_fps = fps * multiplier
+            filename = f"{uuid.uuid4()}.mp4"
+            output_path = os.path.join(output_dir, filename)
 
-        self._encode_frames(interp_dir, output_path, output_fps)
+            self._encode_frames(interp_dir, output_path, output_fps)
 
-        if progress_callback:
-            progress_callback(95, 100)
+            if progress_callback:
+                progress_callback(95, 100)
 
-        # Cleanup temp directories
-        self._cleanup(frames_dir)
-        self._cleanup(interp_dir)
+            # Cleanup temp directories
+            self._cleanup(frames_dir)
+            self._cleanup(interp_dir)
 
-        file_size = os.path.getsize(output_path)
-        duration_ms = int(output_frame_count / output_fps * 1000) if output_fps > 0 else 0
+            file_size = os.path.getsize(output_path)
+            duration_ms = int(output_frame_count / output_fps * 1000) if output_fps > 0 else 0
 
-        if progress_callback:
-            progress_callback(100, 100)
+            if progress_callback:
+                progress_callback(100, 100)
 
-        return InterpolationResult(
-            output_path=output_path,
-            original_frames=original_frame_count,
-            output_frames=output_frame_count,
-            multiplier=multiplier,
-            fps=output_fps,
-            duration_ms=duration_ms,
-            file_size_bytes=file_size,
-        )
+            return InterpolationResult(
+                output_path=output_path,
+                original_frames=original_frame_count,
+                output_frames=output_frame_count,
+                multiplier=multiplier,
+                fps=output_fps,
+                duration_ms=duration_ms,
+                file_size_bytes=file_size,
+            )
+        except Exception as e:
+            logger.error(f"RIFE interpolation failed: {e}. Falling back to original video (no interpolation).")
+            # Fallback: copy original as output
+            import shutil
+            filename = f"{uuid.uuid4()}.mp4"
+            output_path = os.path.join(output_dir, filename)
+            shutil.copy2(input_video_path, output_path)
+            file_size = os.path.getsize(output_path)
+            # Try to get duration
+            duration_ms = 0
+            try:
+                probe = subprocess.run(
+                    ["ffprobe", "-v", "quiet", "-show_entries", "format/duration",
+                     "-of", "default=noprint_wrappers=1:nokey=1", input_video_path],
+                    capture_output=True, text=True,
+                )
+                duration_ms = int(float(probe.stdout.strip()) * 1000)
+            except Exception:
+                pass
+            if progress_callback:
+                progress_callback(100, 100)
+            return InterpolationResult(
+                output_path=output_path,
+                original_frames=0,
+                output_frames=0,
+                multiplier=multiplier,
+                fps=fps,
+                duration_ms=duration_ms,
+                file_size_bytes=file_size,
+            )
 
     def _extract_frames(self, video_path: str, output_dir: str) -> int:
         """Extract frames from video using ffmpeg."""

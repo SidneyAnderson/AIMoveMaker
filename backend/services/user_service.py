@@ -7,6 +7,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from backend.dependencies import hash_password, validate_password_strength
 from backend.models.user import User
+from backend.services.notification_service import send_notification_to_user
 
 
 async def get_user_by_id(db: AsyncSession, user_id: str) -> User:
@@ -58,10 +59,16 @@ async def create_user_by_admin(
 
 async def update_user(db: AsyncSession, user: User, data: dict) -> User:
     """Update user fields. Handles admin-specific fields like is_active and global_role."""
+    old_approval = user.approval_state
     for key, value in data.items():
         if value is not None and hasattr(user, key):
             setattr(user, key, value)
     await db.flush()
+    if user.approval_state == "approved" and old_approval != "approved":
+        try:
+            await send_notification_to_user(db, user, "account_approved")
+        except Exception:
+            pass
     return user
 
 

@@ -21,20 +21,16 @@ settings = get_settings()
 
 
 async def list_snapshots(
-    db: AsyncSession, project_id: str, skip: int = 0, limit: int = 100
+    db: AsyncSession, project_id: str, tier: str | None = None, skip: int = 0, limit: int = 100
 ) -> tuple[list[Snapshot], int]:
-    count_result = await db.execute(
-        select(func.count())
-        .select_from(Snapshot)
-        .where(Snapshot.project_id == project_id)
-    )
-    total = count_result.scalar() or 0
+    q = select(Snapshot).where(Snapshot.project_id == project_id)
+    cq = select(func.count()).select_from(Snapshot).where(Snapshot.project_id == project_id)
+    if tier:
+        q = q.where(Snapshot.tier == tier)
+        cq = cq.where(Snapshot.tier == tier)
+    total = (await db.execute(cq)).scalar() or 0
     result = await db.execute(
-        select(Snapshot)
-        .where(Snapshot.project_id == project_id)
-        .order_by(Snapshot.created_at.desc())
-        .offset(skip)
-        .limit(limit)
+        q.order_by(Snapshot.created_at.desc()).offset(skip).limit(limit)
     )
     return list(result.scalars().all()), total
 
@@ -55,9 +51,10 @@ async def create_snapshot(
     project_id: str,
     user_id: str | None,
     snap_type: str = "manual",
+    tier: str = "manual",
     label: str | None = None,
 ) -> Snapshot:
-    """Create a snapshot containing the full project state (storyboard + timeline)."""
+    """Create a tiered snapshot (auto, manual, major, handoff) with auto-versioning."""
     base = os.path.join(settings.STORAGE_BASE_PATH, "snapshots", project_id)
     subdir = "checkpoints" if snap_type == "checkpoint" else (
         "manual" if snap_type == "manual" else "auto"
@@ -65,9 +62,19 @@ async def create_snapshot(
     snap_dir = os.path.join(base, subdir)
     os.makedirs(snap_dir, exist_ok=True)
 
+    # Auto-versioning: count existing for tier
+    count_result = await db.execute(
+        select(func.count(Snapshot.id)).where(
+            Snapshot.project_id == project_id,
+            Snapshot.tier == tier
+        )
+    )
+    version = (count_result.scalar() or 0) + 1
     ts = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
-    filename = f"snapshot_{ts}.json"
+    filename = f"snapshot_{tier}_v{version}_{ts}.json"
     path = os.path.join(snap_dir, filename)
+
+    auto_label = label or f"{tier.title()} {snap_type} v{version}"
 
     # Serialize project state
     # 1. Storyboard + keyframes
@@ -153,7 +160,8 @@ async def create_snapshot(
     snapshot = Snapshot(
         project_id=project_id,
         type=snap_type,
-        label=label,
+        tier=tier,
+        label=auto_label,
         storage_path=path,
         size_bytes=len(data_str),
         created_by=user_id,

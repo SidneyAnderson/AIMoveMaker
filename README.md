@@ -1,6 +1,6 @@
 # AI Movie Maker
 
-End-to-end AI film production platform. Generate images, videos, music, sound effects, voiceovers, and lip-synced output — all from a browser-based timeline editor.
+End-to-end AI film production platform (local-first NLE). Storyboard + Canvas for creative (T2I/I2I/inpaint/outpaint/ControlNet/LoRA + non-destructive pixel editing), Timeline multi-track NLE for engineering (LTX/WAN video, MusicGen/AudioGen/TTS/lipsync, RIFE interp, FFmpeg export). Advanced features now complete: full dnd-kit timeline interaction, batch queues with live progress, real-time notifications (email+webhook+WS), prompt templates+history, tiered snapshots, PNG sequence export, and robust pipelines. Generate images, videos, music, sound effects, voiceovers, and lip-synced output — all from a browser-based timeline editor.
 
 ## Prerequisites
 
@@ -84,6 +84,25 @@ After running `./start.sh`, you will have:
 6. **Submit handoff** to switch from Creative to Engineering phase
 7. **Generate video** from the assembled timeline
 8. **Export** the final output
+
+## v1 Implementation Status (Gaps Closed)
+
+High and medium priority gaps from the original project backlog have been systematically closed (items 1-6):
+
+- **Full Timeline depth** — dnd-kit powered hybrid drag/trim/reorder (tracks + per-track clips), Shift-key reorder mode, hover-only grips, overlap conflict visuals, snap-to-grid/other-clips, live overrides + PATCH persistence on release, real audio waveforms with Web Audio peaks + offset editing.
+- **Advanced notifications** — multi-channel (in-app + email via SMTP templates + webhook), user preferences, WebSocket push, hooks on job complete, handoff, approvals, renders.
+- **Prompt Templates + History** — full CRUD, global/project scope, one-click re-apply in Storyboard/Canvas, auto-write on generation, negative prompts + scope toggle.
+- **Candidate variations** — carousel in Storyboard detail + keyframe cards.
+- **Tiered snapshots** — auto/manual/major/handoff, versioning, restore with state overwrite, UI modal with filters.
+- **Batch queue UI** — create from selected queued jobs in modal, live progress bars + counters (auto-updated on job terminal states via shared status hook).
+- **PNG sequence export** — dedicated ffmpeg path + ZIP packaging, exposed in Timeline toolbar.
+- **Robust audio + interpolation** — broad fallbacks (original video on lipsync/RIFE failure).
+- **Canvas pixel tools** — non-destructive masks, crop/rotate/flip/adjust, ControlNet/LoRA display, prompt integration.
+- **State machine + persona gating** — Draft → creative_active → pending_handoff → eng_active → ... with banners, disabled toolbars, and role enforcement.
+
+Low-priority items (hardware profiler polish, analytics charts, collaboration cursors, deeper ControlNet/LoRA editors, final audit) remain for subsequent work.
+
+All changes pass `tsc --noEmit` (zero errors) and Python compile.
 
 ## Project Structure
 
