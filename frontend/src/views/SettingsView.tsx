@@ -2,7 +2,8 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import api from '@/api/client'
 import { useState, useEffect } from 'react'
 import { getNotificationPreferences, updateNotificationPreferences } from '@/api/notifications'
-import { Settings, Pencil, Check, X, Cpu, HardDrive, Gauge, AlertTriangle, CheckCircle, RefreshCw, Play, BarChart3, Clock, TrendingUp, XCircle } from 'lucide-react'
+import { Settings, Pencil, Check, X, Cpu, HardDrive, Gauge, AlertTriangle, CheckCircle, RefreshCw, Play, BarChart3, Clock, TrendingUp, XCircle, AlertCircle } from 'lucide-react'
+import { getErrorInfo } from '@/lib/errorCatalog'
 import { toast } from 'sonner'
 import { useProjectStore } from '@/stores/projectStore'
 import { listKeyframes } from '@/api/storyboard'
@@ -636,12 +637,18 @@ export default function SettingsView() {
                 <div>
                   <div className="text-xs text-text-muted mb-1.5 flex items-center gap-1"><XCircle className="w-3 h-3 text-error" /> Top Failure Reasons</div>
                   <div className="text-xs space-y-1">
-                    {Object.entries(analytics.failureReasons).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([code, count]) => (
-                      <div key={code} className="flex justify-between bg-error/10 border border-error/30 px-2 py-0.5 rounded font-mono">
-                        <span className="truncate">{code}</span>
-                        <span>{count}</span>
-                      </div>
-                    ))}
+                    {Object.entries(analytics.failureReasons).sort((a, b) => b[1] - a[1]).slice(0, 3).map(([code, count]) => {
+                      const info = getErrorInfo(code);
+                      return (
+                        <div key={code} className="bg-error/10 border border-error/30 px-2 py-1 rounded" title={info.userMessage}>
+                          <div className="flex justify-between">
+                            <span className="font-medium text-error">{info.title}</span>
+                            <span className="font-mono text-error/70">{count}×</span>
+                          </div>
+                          <div className="text-[10px] text-text-muted mt-0.5 line-clamp-1">{info.suggestedAction}</div>
+                        </div>
+                      );
+                    })}
                   </div>
                 </div>
               )}

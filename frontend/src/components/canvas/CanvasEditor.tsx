@@ -1,5 +1,6 @@
 import React, { useState, useRef, useEffect } from 'react'
-import { X, Trash2, RefreshCw, Wand2, Download, Loader2 } from 'lucide-react'
+import { X, Trash2, RefreshCw, Wand2, Download, Loader2, AlertCircle } from 'lucide-react'
+import { getErrorInfo } from '@/lib/errorCatalog'
 import MaskCanvas from './MaskCanvas'
 import { loadAssetImage, uploadAsset } from '@/api/assets'
 import { createJob } from '@/api/jobs'
@@ -730,7 +731,7 @@ export default function CanvasEditor({
           </div>
         ) : generationStatus === 'failed' ? (
           <div className="flex items-center justify-between w-full">
-            <span className="text-error">Generation failed. Check Jobs panel for details.</span>
+            <span className="text-error flex items-center gap-1"><AlertCircle className="w-3 h-3" /> Generation failed. Check Jobs panel for details and suggested fixes.</span>
             <button onClick={handleClose} className="px-3 py-1 border border-border rounded-btn text-xs">
               Close
             </button>

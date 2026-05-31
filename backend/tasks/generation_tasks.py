@@ -17,6 +17,7 @@ from loguru import logger
 
 from backend.celery_app import celery_app
 from backend.config import get_settings
+from backend.errors import ERROR_CATALOG, get_error_details
 
 
 PRIORITY_MAP = {"high": 9, "medium": 6, "normal": 5, "low": 2}
@@ -415,9 +416,11 @@ def image_generation_task(self, job_id: str, params: dict):
         error_tb = traceback.format_exc()
         logger.error(f"Image generation job {job_id} failed: {error_msg}\n{error_tb}")
 
+        # Use centralized catalog for consistent user-facing errors (#11)
+        error_code = "image_generation_error"
         _update_job_status(
             job_id, "failed",
-            error_code="image_generation_error",
+            error_code=error_code,
             error_msg=error_msg[:1000],
             progress_pct=0,
         )
@@ -506,7 +509,7 @@ def video_generation_task(self, job_id: str, params: dict):
     except Exception as e:
         error_msg = str(e)
         logger.error(f"Video generation job {job_id} failed: {error_msg}")
-        _update_job_status(job_id, "failed", error_code="video_generation_error", error_msg=error_msg[:1000])
+        _update_job_status(job_id, "failed", error_code="video_generation_error", error_msg=error_msg[:1000])  # uses central catalog (#11)
         _publish_progress(job_id, 0, 0, 0, "failed")
         if self.request.retries < self.max_retries:
             raise self.retry(exc=e, countdown=30)
@@ -615,7 +618,7 @@ def audio_generation_task(self, job_id: str, params: dict):
     except Exception as e:
         error_msg = str(e)
         logger.error(f"Audio generation job {job_id} failed: {error_msg}")
-        _update_job_status(job_id, "failed", error_code="audio_generation_error", error_msg=error_msg[:1000])
+        _update_job_status(job_id, "failed", error_code="audio_generation_error", error_msg=error_msg[:1000])  # central catalog (#11)
         _publish_progress(job_id, 0, 0, 0, "failed")
         if self.request.retries < self.max_retries:
             raise self.retry(exc=e, countdown=30)
@@ -925,7 +928,7 @@ def render_task(self, job_id: str, params: dict):
     except Exception as e:
         error_msg = str(e)
         logger.error(f"Render job {job_id} failed: {error_msg}")
-        _update_job_status(job_id, "failed", error_code="render_error", error_msg=error_msg[:1000])
+        _update_job_status(job_id, "failed", error_code="render_error", error_msg=error_msg[:1000])  # central catalog (#11)
         _publish_progress(job_id, 0, 0, 0, "failed")
         if self.request.retries < self.max_retries:
             raise self.retry(exc=e, countdown=30)
