@@ -131,18 +131,24 @@ cd frontend && npx tsc --noEmit --skipLibCheck
 # Python files: all compile cleanly
 ```
 
-### Latest Full Regression QA Results (April 2026)
+### Latest Full Regression QA Results (May 31, 2026)
 - **Static Analysis**:
-  - `tsc --noEmit --skipLibCheck`: **0 errors**.
+  - `frontend npm run build`: **passed** (Vite reports only the existing chunk-size warning).
   - Complete `py_compile` sweep over all `backend/**/*.py`: clean.
-- **Import & Module Health**: All critical modules (new `errors.py` catalog, snapshot service, generation tasks, etc.) import without issues.
+- **Import, Migration & Module Health**:
+  - `alembic upgrade head`: clean; latest migration adds `snapshots.tier`.
+  - All critical modules (error catalog, snapshot service, generation tasks, etc.) import without issues.
 - **Existing Tests**:
+  - `tests/test_phase2_compliance.py` (API compliance verification): **88/88 passed**.
+  - `python -m pytest backend/tests -v`: **3/3 passed** (migration/schema parity + snapshot router regressions).
+  - `tests/test_phase5.py` (Frontend verification): **111/111 passed**.
   - `tests/test_phase6.py` (Integration & Hardening verification): **88/88 passed**.
   - Other phase scripts pass cleanly when executed directly.
 - **Note on `pytest tests/`**: The root `test_phase*.py` files are self-contained verification scripts that call `sys.exit()` at module import time. This design causes internal collection errors under pytest (expected behavior, not a regression in application code). Always run them directly with `python`.
 - **Regression Spot-Checks**:
   - Full grep for TODO/FIXME/"future UI" across source (excluding venv/node_modules): only harmless input placeholders remain.
-  - Verified no breakage in recently completed features: error catalog surfacing, batch snapshot auto-triggers, advanced ControlNet/LoRA editors, snapshots polish, collaboration presence, analytics, etc.
+  - Verified no breakage in recently completed features: error catalog surfacing, batch snapshot auto-triggers, advanced ControlNet/LoRA editors, tiered snapshots, collaboration presence, analytics, etc.
+  - Verified snapshot API responses hide server-side `storage_path` and support `tier` filtering.
   - Legacy cleanup performed (removed vestigial state from Timeline dnd-kit work; refreshed stale comments).
 - **Outcome**: **Zero regressions**. The entire 13-gap implementation + all prior features are stable and verified.
 

@@ -1,0 +1,3091 @@
+PRODUCT REQUIREMENTS DOCUMENT
+AI Movie Maker
+End-to-End AI Film Production Platform
+Version
+1.0 — Initial Release, current-state addendum May 31, 2026
+Status
+Implemented v1 — Regression verified
+Date
+March 13, 2026; updated May 31, 2026
+Classification
+Independent Project — Confidential
+Intended Reader
+AI Build Agent + Engineering Team
+Section 0: How to Read This Document
+This document is a build contract. Every decision is stated as fact. The primary reader is an AI build agent; the secondary reader is a human engineering team. Nothing in this document requires inference — all decisions have been made.
+Conventions
+Convention
+Meaning
+Example
+MUST
+Non-negotiable. Build exactly as specified.
+The system MUST use PostgreSQL in production.
+MUST NOT
+Explicitly prohibited.
+The system MUST NOT use Docker unless specified.
+SHOULD
+Strong recommendation. Deviate only with documented justification.
+Errors SHOULD include a trace_id.
+MAY
+Optional.
+The Admin MAY export the audit log as CSV.
+TBD
+Deferred to v2. Do not implement in v1.
+Audio timing offset — TBD v2.
+Field Type Notation
+Notation
+Type
+Notes
+string
+VARCHAR / TEXT
+Use TEXT unless length noted
+uuid
+UUID v4
+All primary keys
+int
+INTEGER (32-bit)
+float
+FLOAT
+Use NUMERIC(10,4) for cost fields
+bool
+BOOLEAN
+json
+JSONB (PostgreSQL)
+Indexed where noted
+datetime
+TIMESTAMP WITH TIME ZONE
+Always UTC
+enum(...)
+Constrained string
+Values in parentheses
+FK(Entity)
+Foreign key
+Cascade rules noted per field
+Acceptance Criteria format: GIVEN [precondition] WHEN [action] THEN [outcome]. Every feature section ends with acceptance criteria. The build is complete for a feature when all its criteria pass.
+Agent Note: Where this document names a library, framework, or tool, use exactly that. Do not substitute alternatives.
+Section 1: Executive Summary
+1.1 Product Vision
+AI Movie Maker is a standalone, web-based, end-to-end AI film production platform. Users produce complete short-form video content — from initial concept through final rendered output — using AI-generated images, video, and audio, without requiring expertise in the underlying model architectures, inference parameters, or video production pipelines.
+The platform abstracts the complexity of diffusion models, video generation models, ControlNet pipelines, LoRA composition, and audio synthesis behind a modern, professional-grade user interface modelled on non-linear video editing conventions. The backend handles all model routing, hardware profiling, queue management, and pipeline orchestration autonomously.
+1.2 Core Value Proposition
+A Creative user produces a complete storyboard of AI-generated images using any registered model and LoRA combination, with full keyframe control, seed management, and image editing — without writing code or configuring pipeline parameters.
+An Engineer user takes that storyboard and produces a finished video with AI-generated motion, ControlNet-guided consistency, frame interpolation, and a full AI-generated audio track.
+The system runs entirely on local hardware (RTX 5090, 32GB VRAM) with transparent, user-confirmed burst capability to Vast.ai datacenter GPUs for high-demand workloads.
+The pipeline is model-agnostic. Adding a new image, video, or audio model requires only registering it in the Model Registry — no frontend or pipeline code changes required.
+1.3 v1 Scope
+In Scope — v1
+Out of Scope — v2
+Text-to-image, image-to-image generation
+Pixel-level paint tools
+Inpainting and outpainting
+PNG sequence + EDL export
+Storyboard mode (Creative persona)
+Real-time multi-user collaboration
+Keyframe-driven timeline (Engineering persona)
+Mobile native application
+LTX-V 2.3 and WAN 2.2 video generation
+Third-party plugin system
+ControlNet: depth, canny, pose, reference
+Cloud-native SaaS deployment
+RIFE frame interpolation (2x/4x)
+Community model marketplace
+AI audio: music, SFX, TTS, lip sync
+Color grading / LUT tools
+Vast.ai cloud GPU bursting
+Subtitle / caption generation
+Multi-user with role-based access (4 personas)
+Transition effects between clips
+Formal Creative to Engineer handoff with lock
+Project analytics dashboard
+Tiered snapshot and version history
+Batch generation queue
+VRAM profiler with cloud routing gate
+Section 2: Personas and Permission Model
+2.1 Persona Definitions
+The platform defines four personas. A single user account MAY hold multiple personas simultaneously (solo mode). Persona assignment is project-scoped except for Admin, which is system-scoped.
+Persona
+Scope
+Count per Project
+Primary Responsibility
+Admin
+System-wide
+Unlimited system Admins
+User management, system config, project creation, role assignment, job override
+Creative
+Per-project
+Exactly 1
+Storyboard, image generation, keyframe composition, image editing
+Engineer
+Per-project
+Exactly 1
+Video pipeline, audio production, ControlNet, render, export
+Viewer
+Per-project
+Unlimited (n)
+Read-only access, commenting
+Solo Mode: A single user MAY hold Admin + Creative + Engineer simultaneously. All feature surfaces for all held roles are available concurrently.
+2.2 Feature Access Matrix
+Feature
+Admin
+Creative
+Engineer
+Viewer
+Create / delete projects
+Yes
+No
+No
+No
+Assign roles to project
+Yes
+No
+No
+No
+System settings (global)
+Yes
+No
+No
+No
+Model Registry management
+Yes
+No
+Yes
+No
+LoRA Registry management
+Yes
+No
+Yes
+No
+Storyboard creation + editing
+No
+Yes
+No
+No
+Image generation (T2I / I2I)
+No
+Yes
+No
+No
+Inpaint / outpaint
+No
+Yes
+No
+No
+Keyframe management
+No
+Yes
+No
+No
+Prompt templates
+No
+Yes
+Yes
+No
+Timeline editing
+No
+No
+Yes
+No
+Video generation
+No
+No
+Yes
+No
+Audio generation
+No
+No
+Yes
+No
+ControlNet — keyframe level
+No
+Yes
+No
+No
+ControlNet — clip level
+No
+No
+Yes
+No
+Render + export
+No
+No
+Yes
+No
+Submit Creative to Engineer handoff
+No
+Yes
+No
+No
+Accept Creative to Engineer handoff
+No
+No
+Yes
+No
+Request Engineer to Creative return
+No
+No
+Yes
+No
+Accept Engineer to Creative return
+No
+Yes
+No
+No
+Cancel any job
+Yes
+No
+No
+No
+Cancel own job
+No
+Yes
+Yes
+No
+Configure auto-save interval
+Yes
+Yes
+Yes
+No
+View project (read-only)
+Yes
+Yes
+Yes
+Yes
+Comment on project
+Yes
+Yes
+Yes
+Yes
+2.3 Project State Machine
+Every project exists in exactly one state. Transitions are role-gated. Admin MAY force any state transition.
+State
+Active Role
+Entry
+Exit
+Draft
+Admin
+Admin creates + assigns roles
+Admin activates → CreativeActive
+CreativeActive
+Creative
+Activated or returned from Engineer
+Creative submits → PendingHandoff
+PendingHandoff
+Locked
+Creative submits storyboard
+Engineer accepts → EngActive; declines → CreativeActive
+EngActive
+Engineer
+Engineer accepts handoff
+Engineer completes → Completed; requests return → PendingReturn
+PendingReturn
+Locked
+Engineer requests return
+Creative accepts → CreativeActive; declines → EngActive
+Completed
+Read-only
+Engineer marks render complete
+Admin reopens or archives
+Lock Rule: In CreativeActive, Engineer is read-only. In EngActive, Creative is read-only. In PendingHandoff or PendingReturn, both roles are read-only. Admin always has full access.
+2.4 User Lifecycle
+This section defines how user accounts are created, authenticated, approved, and deactivated. Two creation paths exist: direct Admin creation and invite-based self-registration.
+2.4.1 First-Boot Bootstrap
+On first server startup, setup.sh seeds a single Admin account: email 'admin@localhost', password 'admin'.
+This account has global_role='admin' and is_active=true. It bypasses pending approval.
+The system MUST detect first login by this bootstrap account and force an immediate password change before granting access to any other screen. Tracked via force_password_change bool on User (default false; set true on bootstrap seed).
+Until the password is changed, all API requests from this account other than POST /auth/change-password MUST return HTTP 403 with error code 'password_change_required'.
+WARNING: The default admin credential is for local bootstrap only. The system MUST display a prominent warning banner in the Admin UI until the default password has been changed.
+2.4.2 Direct Admin Creation
+Admin creates a user via the Admin panel (POST /users). Required fields: full_name, email, password.
+Directly created accounts are immediately active: is_active=true, approval_state='approved'. No approval gate.
+The created user receives an in-app and email notification that their account is ready.
+force_password_change is set to true. The user MUST change their password on first login before accessing any other screen.
+2.4.3 Invite-Based Registration
+Admin sends an invite link to a prospective user. The link leads to an account creation page. The invited user creates their own account and waits for Admin approval before gaining system access.
+Step
+Actor
+Action
+System Behavior
+1
+Admin
+Clicks Send Invite. Enters recipient email.
+Creates UserInvite record with cryptographically random token (32 bytes hex-encoded). Invite expires in 7 days. Email sent to recipient with invite link URL.
+2
+Invitee
+Opens invite link in browser.
+System validates token: exists, not used, not expired. Invalid or expired = clear error with option to request a new invite. Valid = renders account creation page.
+3
+Invitee
+Creates account on the account creation page.
+Page offers: (a) email + password form, (b) Continue with Google, (c) Continue with Discord. On success: User created with approval_state='pending'. UserInvite marked used_at=now.
+4
+System
+Account created.
+All Admins receive in-app + email notification: '[Name] has registered and is awaiting approval.'
+5
+Admin
+Reviews pending user. Clicks Approve or Reject.
+Approve: user.approval_state='approved', user.is_active=true. Reject: user.approval_state='rejected', user.is_active=false.
+6
+System
+Decision recorded.
+User notified by in-app + email. Approved: 'Your account is approved. You can now log in.' Rejected: 'Your registration was not approved.'
+7
+Admin
+Assigns project role to approved user.
+Admin assigns user to a project via Project Members panel. User notified of project + role assignment.
+Pending State: A user with approval_state='pending' MUST NOT access any application screen or API endpoint other than the login page and a 'pending approval' status page. All API requests MUST return HTTP 403 with error code 'account_pending_approval'.
+2.4.4 OAuth Authentication — Google and Discord
+OAuth 2.0 social login is available on the invite registration page and the standard login page. Supported providers: Google and Discord. Both are completely free to implement.
+Provider
+Backend Library
+Scopes Required
+Cost
+Google
+Authlib (Python)
+openid, email, profile
+Free
+Discord
+Authlib (Python)
+identify, email
+Free
+OAuth flow is backend-driven authorization code flow with PKCE. Frontend initiates by redirecting to GET /auth/oauth/{provider}/authorize. Backend handles callback at GET /auth/oauth/{provider}/callback.
+New email (no existing account): a new User record is created with email + full_name from provider, password_hash=null, and an OAuthIdentity record linking provider + provider_user_id to the account. If triggered from an invite link, the invite token is passed through the OAuth state parameter and validated on callback.
+Existing email (account already exists): OAuth identity is merged. A new OAuthIdentity record is created linking provider + provider_user_id to the existing user. The user is logged in to their existing account. password_hash is preserved.
+OAuth provider credentials (client_id, client_secret) stored in Setting table with is_secret=true. Keys: google_oauth_client_id, google_oauth_client_secret, discord_oauth_client_id, discord_oauth_client_secret.
+If OAuth credentials are not configured, the corresponding button is hidden from login and registration pages. No error shown.
+2.4.5 Login Flow
+Standard login: POST /auth/login with email + password. Returns access token (15 min) and refresh token (7 days, rotation on use).
+OAuth login: GET /auth/oauth/{provider}/authorize → provider redirect → GET /auth/oauth/{provider}/callback → same token pair returned.
+Login by approval_state='pending' user: HTTP 403, error code 'account_pending_approval'.
+Login by is_active=false user: HTTP 403, error code 'account_deactivated'.
+Login where force_password_change=true: HTTP 403, error code 'password_change_required'. All endpoints except POST /auth/change-password blocked.
+Rate limiting: 5 failed attempts per email per 15-minute window triggers a 15-minute lockout. Tracked in Redis.
+2.4.6 Password Requirements
+Minimum 10 characters.
+Must contain at least one uppercase letter, one lowercase letter, one digit, and one special character.
+Validated on client (immediate feedback) and server (authoritative). Client validation is UI convenience only.
+Hashing: bcrypt, cost factor 12.
+Forgotten password: POST /auth/forgot-password with email. Time-limited reset link emailed (1 hour expiry) if address matches an active account. Response always returns HTTP 200 regardless of whether the email exists (prevents email enumeration).
+2.4.7 User Deactivation
+Admin MAY deactivate any non-Admin user via PATCH /users/{id} setting is_active=false.
+On deactivation: all active sessions invalidated immediately (refresh tokens revoked in Redis). All queued jobs owned by user are cancelled. Project memberships retained.
+Deactivated users shown in Admin list with 'Deactivated' badge. Hidden from all project member selectors.
+Admin accounts MUST NOT be deactivatable via the UI. Admin must first demote the account to global_role='user' before deactivation is permitted.
+Acceptance Criteria: GIVEN an invited user who has completed registration WHEN they attempt to log in before Admin approval THEN they receive HTTP 403 with error code 'account_pending_approval'. GIVEN Admin approves the user THEN the user receives an email notification AND can log in AND is visible in the project member selector.
+Section 3: System Architecture and Constraints
+3.1 Architecture Overview
+The system is fully decoupled. Frontend (React SPA) and backend (FastAPI) communicate exclusively via REST and WebSocket. No server-side rendering. The frontend MUST NOT contain AI inference logic, model management logic, or file system operations.
+Layer
+Technology
+Role
+Frontend
+React 18 + Vite 5
+Browser SPA. All UI, interaction, WebSocket progress.
+Styling
+Tailwind CSS 3
+Utility-first. No imposed component library.
+API Layer
+FastAPI (Python 3.11+)
+REST + WebSocket server. Auto-generates OpenAPI schema.
+ORM
+SQLAlchemy 2.0 async + Alembic
+Async DB sessions, schema migrations.
+Database (dev)
+SQLite
+Zero-config local development.
+Database (prod)
+PostgreSQL 15+
+Multi-user production. JSONB for param_schema, lora_stack.
+Job Queue
+Celery 5 + Redis 7
+Async tasks, priority queues, retry, batch grouping.
+Progress Pub/Sub
+Redis 7
+WebSocket progress via Celery state + Redis pub/sub.
+AI Pipelines
+HuggingFace Diffusers (latest stable)
+All image and video inference. No ComfyUI dependency.
+Video Processing
+FFmpeg (system) + ffmpeg-python
+Clip assembly, encoding, frame extraction.
+Frame Interpolation
+RIFE (PyTorch)
+Post-process 2x / 4x interpolation.
+Audio — Music/SFX
+AudioCraft (Meta, local)
+MusicGen and AudioGen models.
+Audio — TTS
+Coqui TTS (local)
+Text-to-speech voiceover.
+Audio — Lip Sync
+wav2lip (local)
+Lip sync from audio + source video.
+Auth
+JWT (python-jose) + OAuth2 password flow
+Stateless tokens. Refresh token rotation.
+OAuth 2.0 Social Login
+Authlib (Python)
+Google and Discord OAuth 2.0 authorization code flow with PKCE. Free providers only.
+Email notifications
+fastapi-mail + SMTP
+Webhook delivery
+httpx (async)
+Outbound webhook POST.
+Vast.ai
+vastai Python SDK
+Cloud GPU provisioning and job dispatch.
+HuggingFace
+huggingface_hub SDK
+Model search, download, token auth.
+Civitai
+Civitai REST API v1 (httpx)
+Model and LoRA search, download.
+Logging
+Loguru + structured JSON
+All logs are JSON. trace_id via Python context var.
+Inpainting
+Diffusers StableDiffusionInpaintPipeline
+Mask-based inpaint and outpaint.
+3.2 Hardware Baseline
+Local GPU
+NVIDIA RTX 5090 (Blackwell, sm_120), 32GB VRAM
+System RAM
+64 GB
+OS
+Linux (Ubuntu 22.04+ recommended)
+Python
+3.11+
+CUDA
+12.4+ required for sm_120 support
+PyTorch
+Latest stable with CUDA 12.4 index — must support sm_120
+WARNING: RTX 5090 sm_120 Compatibility: torch.compile with the 'inductor' backend has known instability on sm_120 (Blackwell). The Hardware Profile Service MUST detect sm_120 and fall back to the 'eager' backend. xformers MUST be conditionally loaded — on import failure, fall back to PyTorch SDPA (scaled dot product attention) silently.
+3.3 Hardware Profile Service
+A named backend module. Runs at: (1) server startup, (2) before any Vast.ai instance is provisioned. Determines the active optimization strategy and exposes it to the job dispatcher and pipeline loader.
+GPU Class
+Detection Method
+Optimization Strategy
+RTX 5090 (sm_120, local)
+torch.cuda.get_device_capability() == (12,0)
+fp16, xformers conditional, torch.compile eager backend, flash-attn if available
+A100 / H100 (datacenter)
+VRAM >= 40GB AND sm >= (8,0)
+bf16, torch.compile inductor, flash-attn 2, no xformers
+A6000 / RTX 3090 class
+VRAM 24-40GB AND sm < (8,0)
+fp16, torch.compile eager, xformers
+Unknown / fallback
+Any other
+fp16, no torch.compile, standard attention
+Admin MAY override detected strategy via gpu_optimization_override key in Setting table. The service MUST log the detected profile and active strategy at INFO level on every startup.
+3.4 Deployment — No Docker
+The system deploys as a Python virtual environment on a Linux host. Docker is NOT used for standard deployment.
+setup.sh: Creates Python venv, installs pinned requirements.txt, creates directory structure, runs Alembic migrations, seeds default Admin user and required system settings.
+start.sh: Activates venv, starts Redis if not running, starts Celery worker, starts FastAPI server via uvicorn. All processes log to /opt/aimoviemaker/logs/ with daily rotation.
+requirements.txt: All dependencies at exact pinned versions.
+Exception: The Vast.ai remote job runner MAY use an isolated environment on the datacenter instance. This is the only permitted use of container-based isolation and applies only to the remote side.
+3.5 Directory Structure
+/opt/aimoviemaker/
+  backend/              # FastAPI application
+  frontend/             # React + Vite SPA
+  models/               # Shared model library (Admin + Engineer managed)
+    image/              # FLUX, SDXL, SD15, etc.
+    video/              # LTX-V 2.3, WAN 2.2, etc.
+    audio/              # AudioCraft, Coqui TTS, wav2lip
+    loras/              # Organized by architecture
+    controlnet/         # ControlNet checkpoint files
+  outputs/              # Generated assets
+    {project_id}/images/
+    {project_id}/video/
+    {project_id}/audio/
+    {project_id}/exports/
+  snapshots/            # Project snapshots by type
+  logs/                 # Application logs (daily rotation, 30d retention)
+  data/                 # SQLite file (dev) or pg config (prod)
+Section 4: Feature Specifications — Creative Domain
+All features in this section are accessible to the Creative persona (and Admin in Creative role). Active only when the project is in CreativeActive state.
+4.1 Storyboard Mode
+The Storyboard is the primary Creative workspace. It presents all Keyframes as a scrollable, reorderable grid of image cards. It is the Creative's exclusive view before handoff to Engineering.
+4.1.1 Storyboard Grid
+Keyframe cards display: thumbnail of selected_asset, keyframe index, prompt excerpt (first 80 chars), model name, seed value.
+Cards are drag-and-drop reorderable. Reordering updates the index field on all affected Keyframes atomically.
+Card actions: Regenerate, Edit in Canvas, Duplicate, Delete, Set Selected Asset (from candidate carousel).
+Grid zoom levels: 1-up (large), 3-up, 6-up (default), 12-up (overview).
+Generate All button queues image generation jobs for all Keyframes that have no selected_asset.
+4.1.2 Keyframe Creation
+New Keyframe appends a blank keyframe at the end of the storyboard.
+Insert Before / Insert After via context menu inserts at a specific position.
+Duplicate copies the source keyframe's full prompt, model, LoRA stack, params, and seed into a new keyframe.
+A Keyframe MUST have at least a positive_prompt before a generation job can be queued.
+4.1.3 Handoff Submission
+Submit to Engineering button is available only in CreativeActive state.
+Before submitting, the system validates all keyframes have a selected_asset. If any do not, a non-modal warning lists the incomplete keyframes. The Creative MAY proceed anyway or cancel.
+On submission, project transitions to PendingHandoff. A Notification is sent to the assigned Engineer via all configured channels within 30 seconds.
+Acceptance Criteria: GIVEN a project in CreativeActive with all keyframes having selected assets WHEN Creative clicks Submit to Engineering THEN project state becomes PendingHandoff AND Engineer receives a notification within 30 seconds.
+4.2 Image Generation
+Triggered from the Keyframe panel within the Storyboard. Four modes: T2I, I2I, Inpaint, Outpaint.
+Mode
+Input Required
+Description
+T2I (Text-to-Image)
+Positive prompt
+Generates image from prompt using selected model.
+I2I (Image-to-Image)
+Prompt + source image + denoise strength
+Transforms source image guided by prompt.
+Inpaint
+Prompt + source image + drawn mask
+Redraws masked region guided by prompt. Uses Diffusers inpaint pipeline.
+Outpaint
+Prompt + source image + expand direction + amount
+Extends image beyond original borders guided by prompt.
+4.2.1 Generation Parameters
+Parameters render dynamically from the selected model's param_schema JSON. Universal parameters across all image models:
+Parameter
+Type
+Notes
+positive_prompt
+string
+Required. Owned exclusively by this Keyframe.
+negative_prompt
+string
+Optional. neg_prompt_scope='keyframe' uses this; 'global' uses project-level global_negative_prompt.
+model_id
+FK(ModelRegistry)
+Required. Filtered to type='image'.
+lora_stack
+json[]
+Array of {lora_id: uuid, weight: float 0.0-2.0}. Filtered to matching architecture. Max from model's max_lora_stack_size.
+seed
+int
+Default -1 (random). -1 generates new seed each run unless seed_mode overrides.
+seed_mode
+enum(fixed,random,variation)
+fixed: same seed every run. random: new seed each run. variation: increments by 1 per candidate.
+variation_count
+int
+1-32. Number of candidate assets. Active only when seed_mode=variation.
+width
+int
+From param_schema. Multiple of 8 (SD) or 32 (FLUX).
+height
+int
+From param_schema. Same constraints as width.
+steps
+int
+From param_schema range.
+cfg_scale
+float
+From param_schema range.
+sampler
+enum(...)
+From param_schema allowed values.
+scheduler
+enum(...)
+From param_schema allowed values.
+denoise_strength
+float 0.0-1.0
+I2I and inpaint modes only.
+4.2.2 ControlNet at Keyframe Level
+ControlNet is available on any Keyframe for image generation. This is the primary ControlNet use case in the Creative domain.
+Field
+Type
+Description
+cn_enabled
+bool
+Activates ControlNet for this keyframe generation.
+cn_type
+enum(depth,canny,pose,reference)
+Control signal type.
+cn_control_asset_id
+FK(Asset)
+The control image. Must be type=image.
+cn_strength
+float 0.0-2.0
+ControlNet conditioning scale.
+cn_start_pct
+float 0.0-1.0
+Step percentage at which ControlNet influence begins.
+cn_end_pct
+float 0.0-1.0
+Step percentage at which ControlNet influence ends.
+4.2.3 Candidate Asset Management
+When variation_count > 1, the generation job produces multiple Asset records all linked to the same Keyframe via candidate_asset_ids.
+The Storyboard card shows a carousel of candidate thumbnails. Creative clicks one to set it as selected_asset_id.
+Candidate assets not selected are retained in storage indefinitely. They are never auto-deleted.
+The Creative MAY regenerate at any time, producing new candidates without destroying existing ones.
+Acceptance Criteria: GIVEN a Keyframe with seed_mode=variation and variation_count=4 WHEN generation completes THEN 4 Asset records exist AND all 4 thumbnails appear in the candidate carousel AND selecting one updates selected_asset_id.
+4.3 Canvas Image Editor
+Opens from a Keyframe card. Provides non-destructive image editing. All edits produce a new Asset record. The source asset is never overwritten.
+Tool
+Description
+Backend
+Inpaint
+User draws mask over region to replace. Enters replacement prompt.
+Diffusers inpaint pipeline.
+Outpaint
+Select expand direction and pixel amount. Enter prompt for new region.
+Diffusers outpaint pipeline.
+Crop
+Non-destructive crop with aspect ratio presets and free crop.
+PIL Image crop + resize.
+Resize
+Resize to target dimensions with optional upscaling.
+PIL resize or Real-ESRGAN if registered.
+Flip
+Horizontal or vertical flip.
+PIL ImageOps.
+Brightness / Contrast / Saturation
+Slider-based adjustments.
+PIL ImageEnhance.
+Rotate
+Rotation by degree with fill color option.
+PIL Image.rotate.
+Pixel-level paint tools (brush, clone stamp, healing) are explicitly OUT OF SCOPE for v1.
+Edit history: each operation produces a new Asset. Local session undo/redo stack supports minimum 20 steps.
+Undo/redo operates on local stack only. It does not delete Asset records from the database.
+On canvas close, current state is saved as the new selected_asset_id for the Keyframe.
+4.4 Prompt Management
+4.4.1 Prompt Templates
+Stores: title, positive_prompt, negative_prompt, lora_stack, scope (global or project).
+Global templates visible to all users. Project-scoped visible only to project members.
+Created via Save as Template in the Prompt Studio panel.
+Applying a template populates the current keyframe's prompt fields. User MAY modify after applying.
+4.4.2 Prompt History
+Every generation job writes a PromptHistory record with: prompt_text, negative_prompt, model_id, lora_stack, job_id.
+History panel shows last 100 entries for the current user, filterable by project.
+Any history entry MAY be re-applied to the current keyframe with one click.
+4.4.3 Global Negative Prompt
+Each project has a global_negative_prompt field on the Project entity.
+Each Keyframe has neg_prompt_scope: 'keyframe' (use keyframe's own negative_prompt) or 'global' (use project's global_negative_prompt). Default is 'global'.
+The Prompt Studio panel shows the active negative prompt source with a toggle to switch scope.
+Section 5: Feature Specifications — Engineering Domain
+All features in this section are accessible to the Engineer persona (and Admin in Engineer role). Active when the project is in EngActive state.
+5.1 Timeline Editor
+Primary Engineering workspace. A track-based non-linear editor with a horizontal time axis. The Engineer assembles VideoClips, AudioClips, and ControlNet reference assets on separate tracks.
+Component
+Description
+Timeline
+Root entity. Owns duration_ms, fps (default 24), resolution (default 1280x720). One per project.
+Track
+Horizontal lane. Types: video, audio, controlnet. Multiple tracks per type permitted.
+VideoClip
+Time-bounded segment on a video track. References source Asset. Produces output Asset via Job.
+AudioClip
+Time-bounded segment on audio track. Generates or references an audio Asset.
+ControlNet Track
+Reference-only. Assets here are referenced by VideoClip cn_control_asset_id fields.
+5.1.1 Timeline Controls
+Playhead: scrubable position indicator. Clicking a clip seeks to its start_ms.
+Zoom: horizontal zoom in/out. Minimum resolution 1 frame per pixel.
+Snap: clips snap to frame boundaries and adjacent clip edges when dragging.
+Clip handles: drag left/right edges to trim start_ms and end_ms.
+Track controls: mute (audio), lock (all types), visibility toggle (video).
+5.1.2 Building from Storyboard
+Storyboard Import panel lists all Keyframes with selected_asset thumbnails.
+Engineer drags Keyframe assets to the video track to create VideoClips. Default initial clip duration from system setting default_video_duration_s (default 4 seconds).
+Import All Keyframes bulk-imports all keyframes in storyboard index order.
+5.2 Video Generation
+Mode
+Input
+Description
+T2V
+Positive prompt + model params
+Generates video purely from text prompt.
+I2V
+Source image asset + prompt + params
+Animates a source image. Primary mode for storyboard-driven production.
+V2V
+Source video + prompt + params + ControlNet
+Re-styles or transforms an existing video clip.
+5.2.1 Supported Video Models — v1
+Model
+Architecture
+Primary Use
+Approx VRAM (720p)
+LTX-Video 2.3
+ltxv
+Fast I2V, previews, high iteration speed
+~14 GB
+WAN 2.2
+wan
+High-quality I2V and T2V, hero shots, final renders
+~24 GB+
+WARNING: WAN 2.2 VRAM: WAN 2.2 at 720p can require 24GB+ VRAM depending on frame count. The VRAM profiler MUST flag any WAN 2.2 job estimating > 28GB and offer Vast.ai routing before queuing.
+5.2.2 Video Generation Parameters
+Parameter
+Type
+Notes
+positive_prompt
+string
+Required. Owned exclusively by this VideoClip.
+negative_prompt
+string
+Required. Owned exclusively by this VideoClip.
+model_id
+FK(ModelRegistry)
+Required. Filtered to type='video'.
+lora_stack
+json[]
+LoRAs compatible with selected video model architecture.
+seed
+int
+-1 for random.
+frames
+int
+Total output frames = fps x desired_duration_seconds.
+fps
+int
+Default 24.
+motion_strength
+float 0.0-1.0
+Controls motion intensity. Model-specific interpretation.
+steps
+int
+From param_schema.
+cfg_scale
+float
+From param_schema.
+params
+json
+Additional model-specific params from param_schema.
+5.2.3 ControlNet on VideoClip
+ControlNet on VideoClips is supported but is not the primary use case (primary is Keyframe-level). Same field set applies: cn_enabled, cn_type, cn_control_asset_id, cn_strength, cn_start_pct, cn_end_pct.
+5.2.4 RIFE Frame Interpolation
+Optional post-process after video generation. Configuration per VideoClip.
+Fields: rife_enabled (bool), rife_multiplier (enum: 2x, 4x), scene_cut_detect (bool, default true).
+When rife_enabled=true, a RIFE Job runs after the video generation Job completes, consuming its output asset.
+scene_cut_detect=true prevents RIFE from blending across hard cuts, avoiding ghosting artifacts.
+Interpolated output is a new Asset with subtype='interpolated', becomes the VideoClip's output_asset_id.
+5.3 Audio Generation
+Engineer creates AudioClips on audio tracks in the Timeline. All four audio subtypes are in scope for v1.
+Subtype
+Local Model
+API Fallback
+Description
+music
+AudioCraft MusicGen
+Suno API
+AI music from text prompt. Duration matches clip length.
+sfx
+AudioCraft AudioGen
+ElevenLabs SFX
+Sound effect from text description.
+tts
+Coqui TTS
+ElevenLabs TTS
+Text-to-speech voiceover from script. Voice model configurable.
+lipsync
+wav2lip
+None — local only
+Lip sync from audio asset + source video. Requires sync_to_asset_id pointing to a video Asset.
+5.3.1 Audio Model Routing
+Default model_source='local'. System attempts local model inference first.
+If local model is not registered or unavailable, system sets model_source='api' automatically and uses configured api_provider.
+API credentials stored in Setting table (scope=global). Managed by Admin.
+Engineer MAY manually override to 'api' at the clip level via model_source toggle.
+When API fallback is triggered, a non-modal info toast displays: 'Local model unavailable, using [provider] API.'
+5.3.2 Mix Controls
+Per AudioClip: volume (float 0.0-1.0), fade_in_ms, fade_out_ms, pan (float -1.0 to 1.0), loop (bool).
+sync_to_asset_id links AudioClip to a video Asset. Required for lipsync subtype.
+sync_mode: 'locked' = audio moves with video if clip is repositioned. 'free' = audio position independent.
+5.4 Render and Export
+5.4.1 Render Pipeline
+Engineer initiates render from Timeline toolbar.
+System validates all VideoClips have output_asset_id. Unrendered clips are flagged in a non-modal warning.
+FFmpeg assembles all video clips in timeline order.
+FFmpeg mixes all audio tracks applying volume, fade, and pan per AudioClip.
+Final output encoded in selected format and resolution.
+Render job progress streams via WebSocket to frontend progress meter in real time.
+On completion, output Asset created (type=video, subtype=export) stored in outputs/{project_id}/exports/.
+5.4.2 Export Formats
+Format
+Video Codec
+Container
+Notes
+MP4 / H.264
+libx264
+mp4
+Default. Widest compatibility.
+MKV / H.265
+libx265
+mkv
+High efficiency. Preferred for archival.
+WebM / VP9
+libvpx-vp9
+webm
+Open format. Web delivery.
+5.4.3 Export Parameters
+Resolution: 720p (1280x720), 1080p (1920x1080), 1440p (2560x1440), 4K (3840x2160).
+Frame rate: 24, 25, 30, 60 fps.
+Bitrate: configurable. Defaults: H.264 8Mbps at 1080p, H.265 5Mbps at 1080p.
+Audio codec: AAC (MP4/MKV), Opus (WebM). 48kHz sample rate. Stereo.
+Acceptance Criteria: GIVEN a project in EngActive with all VideoClips rendered WHEN Engineer initiates export as MP4/H.264 at 1080p THEN a render Job is created AND progress streams to frontend in real time AND on completion a downloadable MP4 is available in the Asset Library.
+Section 6: Feature Specifications — Infrastructure and Admin
+6.1 Model Registry
+The shared library of AI models. Managed by Admin and Engineer. All Keyframe, VideoClip, and AudioClip model references point to ModelRegistry records.
+6.1.1 Model Registration Paths
+Download from HuggingFace by repo ID (uses huggingface_hub snapshot_download).
+Download from Civitai by model ID (fetches download URL from Civitai API, downloads server-side).
+Point to existing local path on the server filesystem.
+On registration, the system computes sha256_hash of the model file for integrity and deduplication. If a model with the same sha256_hash already exists, registration is rejected with a clear error identifying the existing record.
+Admin or Engineer MUST provide: name, display_name, type, architecture, vram_floor_mb, param_schema.
+System SHOULD auto-detect architecture and vram_floor_mb from model file metadata (e.g. Diffusers model_index.json) where possible.
+6.1.2 param_schema Format
+A JSONB field defining the UI controls rendered for this model. Each key is a parameter name. Each value is a control definition.
+{ "steps":     { "type": "int",   "min": 1,   "max": 150, "default": 30,    "label": "Steps" },
+  "cfg_scale": { "type": "float", "min": 1.0, "max": 20.0,"default": 7.0,   "label": "CFG Scale" },
+  "sampler":   { "type": "enum",  "values": ["euler","dpm++","ddim"], "default": "euler", "label": "Sampler" } }
+Supported control types: int (slider), float (slider), enum (dropdown), bool (toggle), string (text input).
+The frontend MUST render controls from param_schema without any model-specific hardcoded logic.
+6.1.3 VRAM Profiler
+Before any generation job is queued, the VRAM Profiler calculates estimated VRAM based on: model vram_floor_mb, resolution (width x height), frame count (video only), LoRA stack size, and active precision (fp16/bf16/fp8).
+If estimated VRAM exceeds available local VRAM minus 10% safety margin, the system MUST show a non-blocking modal: estimated VRAM required, available local VRAM, top 3 Vast.ai instance options with specs and cost estimate, and a Confirm and Send to Cloud button.
+The user MUST click Confirm before the job is dispatched to Vast.ai. This gate MUST NOT be bypassable by any setting or system override.
+If user declines, the job is not queued and the user returns to the generation panel.
+6.2 LoRA Registry
+Registration: download from Civitai, download from HuggingFace, or point to local path.
+Fields: name, display_name, architecture, storage_path, source_url, hf_repo_id, civitai_id, trigger_words (json array), nsfw_flag (bool), weight_default (float), file_size_bytes, sha256_hash.
+NSFW LoRAs are stored and displayed without filtering. No content restriction is applied by the application.
+LoRA browser silently filters to show only LoRAs whose architecture matches the currently selected model. No error is shown for filtered LoRAs — they simply do not appear.
+6.3 Job Queue
+6.3.1 Job Types and Priority
+Job Type
+Triggered By
+Default Priority
+image_generation
+Creative from Keyframe panel
+NORMAL
+video_generation
+Engineer from VideoClip panel
+MEDIUM
+audio_generation
+Engineer from AudioClip panel
+MEDIUM
+interpolation
+Automatic after video_generation when rife_enabled=true
+MEDIUM
+inpaint
+Creative from Canvas editor
+NORMAL
+outpaint
+Creative from Canvas editor
+NORMAL
+render
+Engineer from Timeline toolbar
+MEDIUM
+export
+Engineer after render
+MEDIUM
+batch jobs
+Any user via batch queue
+LOW
+Admin-dispatched
+Admin via admin panel
+HIGH
+6.3.2 Queue Behavior
+Single shared Celery queue. Priority order: HIGH > MEDIUM > NORMAL > LOW.
+Admin MAY cancel any job in any state. Creative and Engineer MAY cancel their own jobs if status is 'queued' or 'running'.
+Failed jobs retry automatically up to max_retries (default 2). After max_retries, status='failed'. Non-modal warning appears in the Log Viewer panel.
+Critical failures (OOM, corrupt model file) display as a modal error with error_code and a link to the full log entry.
+Batch jobs share a batch_id. Batch entity tracks job_count, done_count, failed_count for progress display.
+6.3.3 Progress Streaming
+Every running Job streams progress via Redis pub/sub to the FastAPI WebSocket endpoint /ws/jobs/{job_id}.
+Progress updates MUST include: progress_pct (0-100), current_step, total_steps, eta_seconds, status.
+Update interval: every 500ms during active generation.
+Progress meters displayed pervasively: job panel, keyframe card (during image gen), timeline clip (during video gen), global status bar.
+WebSocket connection MUST auto-reconnect on disconnect with exponential backoff (max 30 second interval).
+6.4 Vast.ai Integration
+6.4.1 Routing Flow
+VRAM Profiler flags job as exceeding local capacity.
+System fetches current Vast.ai offers via vastai SDK, filtered by minimum VRAM, CUDA version, and cost per hour.
+Confirmation modal displays: top 3 instance options with GPU specs, VRAM, and estimated cost for the job.
+User selects an instance and clicks Confirm and Send to Cloud.
+System provisions the selected instance.
+System transfers required model files and job payload to the instance. Transfer size and duration MUST be logged.
+Job executes on Vast.ai instance. Progress streams back to local WebSocket.
+On completion, output files transfer back to local outputs/ directory.
+Vast.ai instance is terminated. Actual cost recorded in job.cost_actual_usd.
+WARNING: Cost Estimate Disclaimer: The cost estimate shown before routing is based on instance hourly rate multiplied by estimated job duration. Actual cost may vary. This MUST be stated explicitly in the confirmation modal.
+Vast.ai API key stored in Setting table (key='vastai_api_key', is_secret=true).
+If Vast.ai instance fails mid-job: job status = 'failed', instance is destroyed, user is notified. No automatic retry on Vast.ai.
+6.5 Snapshot and Version History
+Type
+Trigger
+Scope
+Storage Location
+auto_time
+Configurable interval (default 5 min). Set per project by Admin/Engineer/Creative.
+Full project entity state
+snapshots/{project_id}/auto/
+auto_event
+After every completed generation Job.
+Full project entity state
+snapshots/{project_id}/auto/
+manual
+User clicks Save Now.
+Full project entity state
+snapshots/{project_id}/manual/
+checkpoint
+User creates named checkpoint with label.
+Full project entity state
+snapshots/{project_id}/checkpoints/
+Storage format: JSON export of all project entity data. Asset files are NOT duplicated — snapshots store asset IDs only.
+Rollback restores all entity data to snapshot state. Asset files generated after the snapshot remain on disk but are no longer referenced.
+Snapshot panel lists all snapshots sorted by created_at descending. Checkpoints are pinned to the top.
+Pruning: auto_time snapshots kept last 50, auto_event kept last 20. Manual and checkpoint snapshots are never auto-pruned.
+Current implementation update (May 31, 2026): snapshots are tiered with tier enum values auto, manual, major, and handoff. Auto-event snapshots are created on handoff, render completion, and successful batch completion. Snapshot API responses MUST NOT expose storage_path; the path remains server-side only.
+Section 7: Data Model
+All primary keys are UUID v4. All timestamps are TIMESTAMP WITH TIME ZONE in UTC. JSON fields use JSONB in PostgreSQL. Current implementation contains 22 entities across the product domains.
+7.1 User
+Field
+Type
+Notes
+id
+uuid PK
+email
+string UNIQUE
+password_hash
+string
+bcrypt
+global_role
+enum(admin,user)
+System-level role.
+is_active
+bool
+Default true.
+notify_settings
+json
+{ in_app: bool, email: bool, webhook_url: string|null }
+auto_save_interval_s
+int
+Default 300.
+created_at
+datetime
+approval_state
+enum(approved,pending,rejected)
+Default: approved for Admin-created users, pending for invite-registered users.
+force_password_change
+bool
+Default false. Set true on bootstrap seed and direct Admin creation. Blocks all endpoints except password change until resolved.
+last_login_at
+datetime
+7.2 ProjectMember
+Field
+Type
+Notes
+id
+uuid PK
+project_id
+FK(Project) CASCADE DELETE
+user_id
+FK(User) CASCADE DELETE
+role
+enum(creative,engineer,viewer)
+assigned_by
+FK(User)
+Admin who assigned.
+assigned_at
+datetime
+7.3 Project
+Field
+Type
+Notes
+id
+uuid PK
+title
+string
+description
+string nullable
+state
+enum(draft,creative_active,pending_handoff,eng_active,pending_return,completed)
+created_by
+FK(User)
+created_at
+datetime
+updated_at
+datetime
+global_negative_prompt
+string nullable
+Used when neg_prompt_scope='global'.
+auto_save_interval_s
+int nullable
+Null = use user default.
+fps
+int
+Default 24.
+resolution_w
+int
+Default 1280.
+resolution_h
+int
+Default 720.
+7.4 HandoffRecord
+Field
+Type
+Notes
+id
+uuid PK
+project_id
+FK(Project) CASCADE DELETE
+direction
+enum(creative_to_eng,eng_to_creative)
+initiated_by
+FK(User)
+accepted_by
+FK(User) nullable
+Null until accepted.
+initiated_at
+datetime
+accepted_at
+datetime nullable
+notes
+string nullable
+Optional message from initiating user.
+7.5 Snapshot
+Field
+Type
+Notes
+id
+uuid PK
+project_id
+FK(Project) CASCADE DELETE
+type
+enum(auto_time,auto_event,manual,checkpoint)
+tier
+enum(auto,manual,major,handoff)
+Defaults to manual. Used by the tiered snapshot UI and snapshot filtering API.
+label
+string nullable
+Required for checkpoint type.
+storage_path
+string
+Absolute path to JSON snapshot file.
+size_bytes
+int
+created_by
+FK(User) nullable
+Null for auto snapshots.
+created_at
+datetime
+7.6 Storyboard
+Field
+Type
+Notes
+id
+uuid PK
+project_id
+FK(Project) UNIQUE CASCADE DELETE
+One per project.
+created_by
+FK(User)
+created_at
+datetime
+updated_at
+datetime
+7.7 Keyframe
+Field
+Type
+Notes
+id
+uuid PK
+storyboard_id
+FK(Storyboard) CASCADE DELETE
+index
+int
+Order within storyboard. Unique per storyboard.
+positive_prompt
+string nullable
+negative_prompt
+string nullable
+neg_prompt_scope
+enum(keyframe,global)
+Default 'global'.
+mode
+enum(t2i,i2i,inpaint,outpaint)
+Default 't2i'.
+seed
+int
+Default -1 (random).
+seed_mode
+enum(fixed,random,variation)
+Default 'random'.
+variation_count
+int
+Default 1. Max 32.
+model_id
+FK(ModelRegistry) nullable
+lora_stack
+jsonb
+Array of {lora_id: uuid, weight: float}. Default [].
+params
+jsonb
+Model-specific params from param_schema. Default {}.
+cn_enabled
+bool
+Default false.
+cn_type
+enum(depth,canny,pose,reference) nullable
+cn_control_asset_id
+FK(Asset) nullable
+cn_strength
+float nullable
+cn_start_pct
+float nullable
+Default 0.0.
+cn_end_pct
+float nullable
+Default 1.0.
+selected_asset_id
+FK(Asset) nullable
+The chosen output asset.
+candidate_asset_ids
+jsonb
+Array of Asset UUIDs. Default [].
+created_by
+FK(User)
+created_at
+datetime
+updated_at
+datetime
+7.8 Asset
+Field
+Type
+Notes
+id
+uuid PK
+project_id
+FK(Project) CASCADE DELETE
+job_id
+FK(Job) nullable
+Null for imported or uploaded assets.
+type
+enum(image,video,audio)
+subtype
+enum(still,i2i,inpaint,outpaint,controlnet_frame,clip,interpolated,v2v,music,sfx,tts,lipsync,export)
+storage_path
+string
+Absolute path on disk.
+mime_type
+string
+e.g. image/png, video/mp4, audio/wav
+width
+int nullable
+Images and video only.
+height
+int nullable
+Images and video only.
+duration_ms
+int nullable
+Video and audio only.
+file_size_bytes
+int
+created_at
+datetime
+7.9 Timeline
+Field
+Type
+Notes
+id
+uuid PK
+project_id
+FK(Project) UNIQUE CASCADE DELETE
+One per project.
+duration_ms
+int
+Auto-extends as clips are added.
+fps
+int
+Default from Project.fps.
+resolution_w
+int
+resolution_h
+int
+created_at
+datetime
+updated_at
+datetime
+7.10 Track
+Field
+Type
+Notes
+id
+uuid PK
+timeline_id
+FK(Timeline) CASCADE DELETE
+type
+enum(video,audio,controlnet)
+name
+string
+User-assigned label.
+order
+int
+Display order. Lower = higher in UI.
+muted
+bool
+Audio tracks only. Default false.
+locked
+bool
+Default false.
+visible
+bool
+Video tracks only. Default true.
+7.11 VideoClip
+Field
+Type
+Notes
+id
+uuid PK
+track_id
+FK(Track) CASCADE DELETE
+Track must be type='video'.
+start_ms
+int
+end_ms
+int
+order
+int
+Position within track.
+source_asset_id
+FK(Asset) nullable
+Source image/video for I2V/V2V.
+output_asset_id
+FK(Asset) nullable
+Generated video output.
+job_id
+FK(Job) nullable
+Active or last generation job.
+render_state
+enum(unrendered,rendering,done,error)
+Default 'unrendered'.
+mode
+enum(t2v,i2v,v2v)
+Default 'i2v'.
+model_id
+FK(ModelRegistry) nullable
+lora_stack
+jsonb
+Default [].
+positive_prompt
+string nullable
+Owned exclusively by this VideoClip.
+negative_prompt
+string nullable
+Owned exclusively by this VideoClip.
+seed
+int
+Default -1.
+frames
+int nullable
+fps
+int nullable
+motion_strength
+float nullable
+steps
+int nullable
+cfg_scale
+float nullable
+params
+jsonb
+Additional model-specific params. Default {}.
+cn_enabled
+bool
+Default false.
+cn_type
+enum(depth,canny,pose,reference) nullable
+cn_control_asset_id
+FK(Asset) nullable
+cn_strength
+float nullable
+cn_start_pct
+float nullable
+cn_end_pct
+float nullable
+rife_enabled
+bool
+Default false.
+rife_multiplier
+enum(2x,4x)
+Default '2x'.
+scene_cut_detect
+bool
+Default true.
+interp_blend_mode
+string nullable
+created_at
+datetime
+updated_at
+datetime
+7.12 AudioClip
+Field
+Type
+Notes
+id
+uuid PK
+track_id
+FK(Track) CASCADE DELETE
+Track must be type='audio'.
+start_ms
+int
+end_ms
+int
+order
+int
+output_asset_id
+FK(Asset) nullable
+job_id
+FK(Job) nullable
+render_state
+enum(unrendered,rendering,done,error)
+Default 'unrendered'.
+subtype
+enum(music,sfx,tts,lipsync)
+prompt
+string nullable
+Generation prompt for music/sfx/tts.
+model_id
+FK(ModelRegistry) nullable
+model_source
+enum(local,api)
+Default 'local'.
+api_provider
+string nullable
+e.g. 'elevenlabs', 'suno'.
+params
+jsonb
+Model or API specific params. Default {}.
+volume
+float
+0.0-1.0. Default 1.0.
+fade_in_ms
+int
+Default 0.
+fade_out_ms
+int
+Default 0.
+pan
+float
+-1.0 to 1.0. Default 0.0.
+loop
+bool
+Default false.
+sync_to_asset_id
+FK(Asset) nullable
+Required for lipsync subtype.
+sync_mode
+enum(free,locked)
+Default 'free'.
+created_at
+datetime
+updated_at
+datetime
+7.13 Batch
+Field
+Type
+Notes
+id
+uuid PK
+project_id
+FK(Project) CASCADE DELETE
+name
+string
+User-assigned.
+created_by
+FK(User)
+created_at
+datetime
+job_count
+int
+Denormalized total.
+done_count
+int
+Denormalized. Updated as jobs complete.
+failed_count
+int
+Denormalized.
+status
+enum(pending,running,done,partial_failure,failed)
+Derived from counts.
+7.14 Job
+Field
+Type
+Notes
+id
+uuid PK
+project_id
+FK(Project)
+user_id
+FK(User)
+batch_id
+FK(Batch) nullable
+Null if not part of a batch.
+type
+enum(image_generation,video_generation,audio_generation,interpolation,inpaint,outpaint,render,export)
+source_entity_type
+enum(keyframe,videoclip,audioclip,project)
+Polymorphic reference type.
+source_entity_id
+uuid
+ID of the source entity.
+status
+enum(queued,running,done,failed,cancelled)
+priority
+enum(high,medium,normal,low)
+queue_position
+int nullable
+Null when running or done.
+gpu_target
+enum(local,vastai)
+Default 'local'.
+vastai_instance_id
+string nullable
+vram_estimate_mb
+int nullable
+vram_actual_mb
+int nullable
+Populated on completion.
+cost_estimate_usd
+numeric(10,4) nullable
+cost_actual_usd
+numeric(10,4) nullable
+user_ack
+bool
+Default false. Must be true before vastai jobs dispatch.
+user_ack_at
+datetime nullable
+ack_by
+FK(User) nullable
+progress_pct
+int
+0-100.
+current_step
+int nullable
+total_steps
+int nullable
+eta_seconds
+int nullable
+retry_count
+int
+Default 0.
+max_retries
+int
+Default 2.
+error_code
+string nullable
+error_msg
+string nullable
+log_stream_id
+string nullable
+Log backend stream reference.
+queued_at
+datetime
+started_at
+datetime nullable
+completed_at
+datetime nullable
+7.15 ModelRegistry
+Field
+Type
+Notes
+id
+uuid PK
+name
+string UNIQUE
+Machine-readable. e.g. 'flux-dev-fp16'
+display_name
+string
+Human-readable. e.g. 'FLUX Dev (fp16)'
+type
+enum(image,video,audio)
+architecture
+string
+e.g. 'flux','sdxl','sd15','ltxv','wan','musicgen','coqui'
+version
+string nullable
+vram_floor_mb
+int
+Min VRAM to load model.
+vram_recommended_mb
+int
+VRAM for comfortable inference at default resolution.
+supports_cpu_offload
+bool
+Default false.
+supports_fp8
+bool
+Default false.
+supports_fp16
+bool
+Default true.
+min_compute_capability
+string nullable
+e.g. '7.5'. sm_120 = '12.0'
+param_schema
+jsonb
+UI control definitions. See Section 6.1.2.
+compatible_lora_architectures
+jsonb
+Array of architecture strings.
+lora_weight_min
+float
+Default 0.0.
+lora_weight_max
+float
+Default 2.0.
+max_lora_stack_size
+int
+Default 5.
+storage_path
+string
+Absolute local path.
+source_url
+string nullable
+HuggingFace or Civitai URL.
+hf_repo_id
+string nullable
+civitai_id
+string nullable
+file_size_bytes
+int nullable
+sha256_hash
+string nullable
+Deduplication + integrity.
+added_by
+FK(User)
+added_at
+datetime
+is_active
+bool
+Default true.
+7.16 LoRARegistry
+Field
+Type
+Notes
+id
+uuid PK
+name
+string
+display_name
+string
+architecture
+string
+Must match a ModelRegistry architecture value.
+storage_path
+string
+source_url
+string nullable
+hf_repo_id
+string nullable
+civitai_id
+string nullable
+trigger_words
+jsonb
+Array of strings.
+nsfw_flag
+bool
+Default false.
+weight_default
+float
+Default 1.0.
+file_size_bytes
+int nullable
+sha256_hash
+string nullable
+added_by
+FK(User)
+added_at
+datetime
+is_active
+bool
+Default true.
+7.17 Notification
+Field
+Type
+Notes
+id
+uuid PK
+user_id
+FK(User) CASCADE DELETE
+Recipient.
+project_id
+FK(Project) nullable
+type
+enum(handoff_request,handoff_accepted,handoff_declined,return_request,return_accepted,return_declined,job_complete,job_failed,batch_complete,render_complete,system_error)
+channel
+enum(in_app,email,webhook)
+One record per channel per event.
+payload
+jsonb
+Event-specific data for rendering the notification message.
+sent_at
+datetime nullable
+Null until delivery attempted.
+delivered
+bool
+Default false.
+read_at
+datetime nullable
+In-app only.
+created_at
+datetime
+7.18 PromptTemplate
+Field
+Type
+Notes
+id
+uuid PK
+owner_id
+FK(User) CASCADE DELETE
+title
+string
+positive_prompt
+string
+negative_prompt
+string nullable
+lora_stack
+jsonb
+Default [].
+scope
+enum(global,project)
+scope_project_id
+FK(Project) nullable
+Required when scope='project'.
+created_at
+datetime
+updated_at
+datetime
+7.19 PromptHistory
+Field
+Type
+Notes
+id
+uuid PK
+user_id
+FK(User) CASCADE DELETE
+project_id
+FK(Project) nullable
+job_id
+FK(Job) nullable
+prompt_text
+string
+negative_prompt
+string nullable
+model_id
+FK(ModelRegistry) nullable
+lora_stack
+jsonb
+Snapshot of lora stack used.
+used_at
+datetime
+7.21 UserInvite
+Field
+Type
+Notes
+id
+uuid PK
+email
+string
+Recipient email address.
+token
+string UNIQUE
+32-byte cryptographically random token, hex-encoded.
+created_by
+FK(User)
+Admin who sent the invite.
+created_at
+datetime
+expires_at
+datetime
+created_at + 7 days.
+used_at
+datetime nullable
+Null until the invite is consumed.
+used_by
+FK(User) nullable
+User account created from this invite.
+7.22 OAuthIdentity
+Field
+Type
+Notes
+id
+uuid PK
+user_id
+FK(User) CASCADE DELETE
+The local user account this identity belongs to.
+provider
+enum(google,discord)
+provider_user_id
+string
+The unique user ID returned by the OAuth provider.
+provider_email
+string
+Email returned by provider at time of linking.
+access_token
+string nullable
+Provider access token. is_secret equivalent — never logged or returned in API.
+refresh_token
+string nullable
+Provider refresh token where supported.
+linked_at
+datetime
+7.20 Setting
+Field
+Type
+Notes
+id
+uuid PK
+key
+string
+Namespaced. e.g. 'vastai_api_key', 'smtp_host'
+value
+string
+All values stored as string. Cast on read using value_type.
+value_type
+enum(string,int,float,bool,json)
+scope
+enum(global,user)
+scope_id
+uuid nullable
+user_id when scope='user'. Null for global.
+description
+string nullable
+is_secret
+bool
+Default false. Masked in UI and logs.
+updated_by
+FK(User)
+updated_at
+datetime
+7.20.1 Required Global Settings
+Key
+value_type
+Default
+Description
+vastai_api_key
+string
+(empty)
+Vast.ai API key. is_secret=true.
+civitai_api_key
+string
+(empty)
+Civitai API key. is_secret=true.
+hf_token
+string
+(empty)
+HuggingFace token. is_secret=true.
+default_gpu_target
+string
+local
+Default GPU target for new jobs.
+gpu_optimization_override
+string
+(empty)
+Overrides Hardware Profile Service. Empty = auto.
+default_auto_save_interval_s
+int
+300
+System-wide auto-save default.
+smtp_host
+string
+(empty)
+smtp_port
+int
+587
+smtp_user
+string
+(empty)
+is_secret=true.
+smtp_password
+string
+(empty)
+is_secret=true.
+smtp_from_address
+string
+(empty)
+default_video_duration_s
+int
+4
+Default VideoClip duration from storyboard import.
+max_batch_size
+int
+50
+Max jobs per batch.
+vram_safety_margin_pct
+int
+10
+VRAM headroom % before cloud routing warning.
+elevenlabs_api_key
+string
+(empty)
+Audio API fallback. is_secret=true.
+suno_api_key
+string
+(empty)
+Music API fallback. is_secret=true.
+google_oauth_client_id
+string
+(empty)
+Google OAuth app client ID.
+google_oauth_client_secret
+string
+(empty)
+Google OAuth app client secret. is_secret=true.
+discord_oauth_client_id
+string
+(empty)
+Discord OAuth app client ID.
+discord_oauth_client_secret
+string
+(empty)
+Discord OAuth app client secret. is_secret=true.
+allow_self_registration
+bool
+false
+If true, login page shows Register button for unauthenticated users without requiring an invite link.
+Section 8: Non-Functional Requirements
+8.1 Logging
+All log output is structured JSON. Every line MUST include: timestamp (ISO 8601 UTC), level (DEBUG/INFO/WARNING/ERROR/CRITICAL), logger name, message, trace_id.
+trace_id is a UUID generated per HTTP request and propagated through all downstream calls and Celery tasks via Python context variable.
+Log files written to /opt/aimoviemaker/logs/ with daily rotation. Retention: 30 days.
+Frontend Log Viewer displays backend logs in real time via /ws/logs WebSocket, filterable by level, trace_id, job_id, project_id, and time range.
+All AI inference calls MUST log: model_id, input parameters (prompt text at TRACE level only), VRAM before/after, duration_ms, output asset path.
+All Vast.ai operations MUST log: instance_id, specs, estimated_cost, actual_cost, transfer_size_mb, duration_ms.
+Secret Setting values MUST NOT appear in any log. Log '[REDACTED]' for all fields where is_secret=true.
+8.2 Error Handling
+Error Type
+User Treatment
+Log Level
+Job failure (non-critical)
+Non-modal warning in Log Viewer with error_code and job link.
+ERROR
+Job failure — OOM
+Non-modal warning with VRAM stats and Vast.ai retry offer.
+ERROR
+Job failure — corrupt model file
+Modal error with sha256 mismatch details and re-download link.
+CRITICAL
+Invalid API key (Civitai/HF/Vast.ai)
+Modal error on the triggering operation. Key name included.
+ERROR
+WebSocket disconnect
+Silent reconnect with exponential backoff. Status indicator in header.
+WARNING
+Snapshot write failure
+Modal error. Auto-save disabled until resolved.
+CRITICAL
+Audio API fallback triggered
+Non-modal info toast: 'Local model unavailable, using [provider] API.'
+INFO
+Handoff declined
+In-app notification to initiating user. Project state reverted.
+INFO
+8.3 Performance Targets
+Metric
+Target
+API response (non-generation endpoints)
+< 200ms p95
+WebSocket progress update interval
+Every 500ms during active generation
+Storyboard grid render (100 keyframes)
+< 1 second initial paint
+Timeline scrub response
+< 50ms
+Snapshot write (full project state)
+< 5 seconds
+Model load time (FLUX, cold start)
+< 30 seconds on local hardware
+Initial SPA page load
+< 3 seconds on localhost
+8.4 Security
+All API endpoints MUST require valid JWT except POST /auth/login and POST /auth/register.
+JWT expiry: 15 minutes. Refresh token expiry: 7 days. Refresh token rotation on each use.
+Role checks are enforced server-side on every mutating endpoint. Frontend role-gating is UI convenience only and MUST NOT be the sole access control.
+Secret settings are never returned in API responses — only their presence (bool is_set) is confirmed.
+File paths in asset storage_path MUST be validated to prevent path traversal. All paths MUST be within /opt/aimoviemaker/outputs/ or /opt/aimoviemaker/models/.
+Civitai API key MUST be used server-side only. It MUST NOT be transmitted to the frontend.
+8.5 Notifications
+Event
+Recipients
+Channels
+Handoff submitted (Creative to Engineer)
+Assigned Engineer
+in-app, email, webhook
+Handoff accepted
+Creative who submitted
+in-app, email, webhook
+Handoff declined
+Creative who submitted
+in-app, email, webhook
+Return requested (Engineer to Creative)
+Creative
+in-app, email, webhook
+Return accepted
+Engineer
+in-app, email, webhook
+Return declined
+Engineer
+in-app, email, webhook
+Job completed
+Job owner
+in-app (default)
+Job failed
+Job owner + all Admins
+in-app, email if configured
+Batch completed
+Batch creator
+in-app, email if configured
+Render completed
+Engineer
+in-app, email, webhook
+System error (CRITICAL level)
+All Admins
+in-app, email
+Section 9: API and Integration Specifications
+9.1 REST API
+FastAPI backend. Full OpenAPI schema auto-generated at /docs (Swagger UI) and /openapi.json. Primary endpoint groups:
+Group
+Base Path
+Key Operations
+Authentication
+/auth
+POST /login, POST /refresh, POST /logout, POST /forgot-password, POST /change-password
+OAuth
+/auth/oauth/{provider}
+GET /authorize, GET /callback (providers: google, discord)
+User Invites
+/invites
+POST / (Admin — send invite), GET / (Admin — list invites), DELETE /{id} (Admin — revoke)
+Users
+/users
+GET /me, PATCH /me, GET / (Admin), POST / (Admin), DELETE /{id} (Admin)
+Projects
+/projects
+GET /, POST / (Admin), GET /{id}, PATCH /{id} (Admin), DELETE /{id} (Admin)
+Project Members
+/projects/{id}/members
+GET /, POST / (Admin), DELETE /{user_id} (Admin)
+Handoffs
+/projects/{id}/handoffs
+POST /, PATCH /{hid}/accept, PATCH /{hid}/decline
+Storyboard
+/projects/{id}/storyboard
+GET /, PATCH / (reorder)
+Keyframes
+/projects/{id}/keyframes
+GET /, POST /, GET /{kid}, PATCH /{kid}, DELETE /{kid}
+Timeline
+/projects/{id}/timeline
+GET /, PATCH /
+Tracks
+/projects/{id}/tracks
+GET /, POST /, PATCH /{tid}, DELETE /{tid}
+VideoClips
+/projects/{id}/videoclips
+GET /, POST /, GET /{vid}, PATCH /{vid}, DELETE /{vid}
+AudioClips
+/projects/{id}/audioclips
+GET /, POST /, GET /{aid}, PATCH /{aid}, DELETE /{aid}
+Assets
+/projects/{id}/assets
+GET /, GET /{aid}, DELETE /{aid}, GET /{aid}/download
+Jobs
+/jobs
+GET /, POST /, GET /{jid}, DELETE /{jid} (cancel)
+Batches
+/batches
+GET /, POST /, GET /{bid}
+Model Registry
+/models
+GET /, POST / (Admin+Eng), PATCH /{mid} (Admin+Eng), DELETE /{mid} (Admin)
+LoRA Registry
+/loras
+GET /, POST / (Admin+Eng), DELETE /{lid} (Admin)
+Civitai Search
+/integrations/civitai/search
+GET /?query=&type=&page=
+HuggingFace Search
+/integrations/huggingface/search
+GET /?query=&type=
+Vast.ai Offers
+/integrations/vastai/offers
+GET /?min_vram_mb=&max_price_per_hr=
+Settings
+/settings
+GET / (Admin), PATCH /{key} (Admin)
+Snapshots
+/projects/{id}/snapshots
+GET /, POST / (manual), POST /{sid}/restore
+Notifications
+/notifications
+GET /, PATCH /{nid}/read, PATCH /read-all
+9.2 WebSocket Endpoints
+Endpoint
+Purpose
+Message Schema
+WS /ws/jobs/{job_id}
+Real-time progress for a specific job.
+{ job_id, progress_pct, current_step, total_steps, eta_seconds, status }
+WS /ws/projects/{project_id}
+Project-level events: state changes, handoffs, new assets.
+{ event_type, payload }
+WS /ws/logs
+Live log stream for authenticated user.
+{ timestamp, level, message, trace_id, job_id, project_id }
+9.3 Civitai Integration
+Base URL: https://civitai.com/api/v1
+Authentication: X-API-Key request header. Key from Setting key='civitai_api_key'.
+Model search: GET /models?query={q}&types=Checkpoint,LORA&nsfw=true&limit=20&page={n}
+Model download: resolved via download URL from API response. All downloads are server-side.
+NSFW=true is always passed. No content filtering by the application.
+Rate limiting: implement exponential backoff on 429 responses. Log at WARNING level.
+9.4 HuggingFace Integration
+Library: huggingface_hub Python SDK.
+Authentication: HfApi(token=hf_token) from Setting table.
+Search: HfApi.list_models(search=q, sort='downloads', limit=20).
+Download: snapshot_download(repo_id=..., token=..., local_dir=target_path).
+Gated models: On GatedRepoError, display: 'This model requires accepting terms on HuggingFace. Visit [repo URL], request access, then retry.'
+9.5 Vast.ai Integration
+Library: vastai Python SDK.
+Authentication: VastClient(api_key=vastai_api_key).
+Instance search: filtered by gpu_ram >= min_vram, cuda_vers >= min_cuda, rentable=true. Sorted by dph_total ascending.
+Lifecycle: create_instance → poll until running → transfer models → execute job → transfer outputs → destroy instance.
+Model transfer: rsync or vastai copy. Transfer size and duration MUST be logged.
+Job execution: SSH command on remote instance using same Python venv and pipeline code.
+On mid-job failure: job status='failed', instance destroyed, user notified. No automatic Vast.ai retry.
+Section 10: Open Items and v2 Backlog
+10.1 Open Items — Resolve Before Build Start
+Item
+Description
+Owner
+Lip sync model
+wav2lip is specified. SadTalker is an alternative with better head pose generation. Confirm based on sm_120 compatibility testing before build.
+Engineering
+Real-ESRGAN upscaling
+Canvas Resize tool references Real-ESRGAN 'if model registered'. Confirm whether this is v1 requirement or v2.
+Product
+Audio export formats
+WAV and FLAC as audio export formats are implied but not explicitly specified. Confirm required audio file formats for export.
+Product
+xformers sm_120 status
+Verify xformers sm_120 support at build start. Conditional load + SDPA fallback is the specified behavior regardless of outcome.
+Engineering
+10.2 v2 Backlog
+Feature
+Rationale for Deferral
+PNG sequence + EDL export
+Low initial demand vs. build cost. Pro NLE users are secondary audience.
+Pixel-level paint tools
+Significant canvas rendering engine complexity. Inpaint covers primary use cases.
+Real-time multi-user collaboration
+Requires CRDT or OT. Out of scope for v1 fixed-crew model.
+Mobile native application
+Web-responsive sufficient for v1.
+Community model marketplace
+Requires moderation, CDN, payments — separate infrastructure initiative.
+Cloud-native SaaS deployment
+Multi-tenant isolation and billing are a separate product.
+Third-party plugin system
+Requires stable v1 API surface first.
+Transition effects (cross-dissolve, wipe)
+FFmpeg filter chains. Nice-to-have post-v1.
+Color grading and LUT tools
+Pro finishing feature. Deferred.
+Subtitle / caption generation
+Whisper integration for auto-transcription.
+Project analytics dashboard
+Generation cost tracking, model usage stats.
+Admin audit log UI
+Structured log backend sufficient for v1. Dedicated UI is v2.
+End of Document
+AI Movie Maker PRD v1.0 — March 13, 2026
+Section 11: UI/UX Specification
+This section is the authoritative design contract for the frontend. The agent MUST implement these specifications exactly. No external design tool is required or used — this document is the design system.
+11.1 Design Language
+Aesthetic
+Dark professional tool with color accents. Primary reference: DaVinci Resolve / Adobe Premiere. Deep panel chrome, structured toolbar regions, application-weight shell — this is a dedicated production tool, not a SaaS dashboard. Secondary reference for component styling only: VS Code / Cursor.
+Component Baseline
+shadcn/ui (latest) + Tailwind CSS 3. Use shadcn/ui primitives for all interactive components: dialogs, dropdowns, tooltips, popovers, sliders, toggles, tabs. Do not build these from scratch.
+Density
+Moderate. Information-rich with clear visual hierarchy. Content is never cramped but never wastes space. Power users can see a lot at once; new users can follow the hierarchy.
+Motion
+Minimal and purposeful. Use Framer Motion for: panel transitions, modal entrance/exit, progress bar fills, drag-and-drop feedback. No decorative animations. Duration cap: 200ms for micro-interactions, 300ms for panel transitions.
+Icons
+Lucide React. Consistent 16px (inline), 18px (toolbar), 20px (panel headers). Never mix icon sets.
+Typography
+Inter (Google Fonts). Load via @fontsource/inter.
+11.2 Color System
+All colors are defined as CSS custom properties on :root and used exclusively via those variables in Tailwind classes. No hardcoded hex values in component code.
+Token
+Light Value
+Dark Value (Active)
+Usage
+--bg-base
+#ffffff
+#0d0d0d
+App background
+--bg-surface
+#f5f5f5
+#161616
+Panel, card backgrounds
+--bg-elevated
+#ebebeb
+#1f1f1f
+Dropdown, popover, modal backgrounds
+--bg-subtle
+#e0e0e0
+#2a2a2a
+Hover states, subtle separators
+--border
+#d4d4d4
+#2e2e2e
+All borders and dividers
+--border-strong
+#a3a3a3
+#404040
+Focused inputs, active panel borders
+--text-primary
+#0d0d0d
+#f0f0f0
+Primary body text
+--text-secondary
+#525252
+#a0a0a0
+Labels, metadata, secondary info
+--text-muted
+#8a8a8a
+#606060
+Placeholders, disabled text
+--accent
+#7c3aed
+#8b5cf6
+Primary accent — violet. Buttons, active states, selections.
+--accent-hover
+#6d28d9
+#7c3aed
+Accent hover state
+--accent-subtle
+#ede9fe
+#1e1230
+Accent background for selected rows, active tabs
+--accent-fg
+#ffffff
+#ffffff
+Text on accent backgrounds
+--success
+#16a34a
+#22c55e
+Job complete, approved states
+--warning
+#d97706
+#f59e0b
+VRAM warnings, pending states
+--error
+#dc2626
+#ef4444
+Errors, failed jobs, destructive actions
+--info
+#2563eb
+#3b82f6
+Informational toasts, non-critical notices
+Dark Mode Only: v1 ships dark mode only. The light values above are defined for future use but the app initializes in dark mode and does not expose a mode toggle in v1. The --bg-base value is #0d0d0d, not pure black, to reduce eye strain on high-contrast displays.
+11.3 Typography Scale
+Role
+Font
+Size
+Weight
+Line Height
+Usage
+Display
+Inter
+24px
+700
+1.2
+Page titles, modal headers
+Heading 1
+Inter
+20px
+600
+1.3
+Panel section headers
+Heading 2
+Inter
+16px
+600
+1.4
+Sub-section headers, card titles
+Body
+Inter
+14px
+400
+1.5
+Default body text, form labels
+Body Small
+Inter
+13px
+400
+1.5
+Secondary metadata, timestamps
+Caption
+Inter
+12px
+400
+1.4
+Tooltips, keyframe index labels
+Code
+JetBrains Mono
+13px
+400
+1.6
+Prompt text areas, log viewer, code blocks
+Label
+Inter
+11px
+500
+1.3
+ALL CAPS track labels, badge text
+11.4 Spacing and Layout
+Base grid unit: 4px. All spacing values MUST be multiples of 4px.
+Standard inner panel padding: 16px (4 units).
+Compact panel padding (timeline, storyboard toolbar): 8px (2 units).
+Standard border radius: 6px for cards and panels, 4px for buttons and inputs, 2px for tags and badges.
+Standard border width: 1px for all borders. 2px for focused inputs and active/selected states.
+11.5 Application Shell
+The application shell is a fixed-layout shell that does not scroll. All scrolling occurs within individual panels. The shell is composed of four regions:
+Region
+Position
+Height / Width
+Content
+Top Bar
+Fixed top
+48px tall, full width
+App logo, project name, project state badge, active persona indicators, notification bell, user avatar/menu.
+Left Sidebar
+Fixed left
+220px wide, full remaining height
+Navigation: Projects, Model Library, LoRA Library, Settings (Admin only). Collapses to 48px icon rail on toggle.
+Main Canvas
+Remaining space
+Fills all remaining area
+The primary workspace. Content changes based on active view: Storyboard, Timeline, Admin panel, Settings.
+Right Panel
+Fixed right, slides in
+320px wide, full remaining height
+Context-sensitive inspector. Shows Keyframe properties, VideoClip properties, AudioClip properties, Job details depending on selection. Hidden when nothing is selected.
+All four regions support resizable panel boundaries via drag handle. Left sidebar and right panel widths are user-adjustable and persisted to localStorage.
+The top bar project state badge uses color to communicate state: Draft (--text-muted), CreativeActive (--accent), PendingHandoff (--warning), EngActive (--success), PendingReturn (--warning), Completed (--text-secondary).
+11.6 Storyboard View
+The Storyboard is the Creative persona's primary workspace. It occupies the full Main Canvas area.
+11.6.1 Keyframe Card
+Element
+Spec
+Thumbnail
+Fills card top 75%. Object-fit: cover. Background --bg-subtle when no asset. Shows a centered dashed border + plus icon when empty.
+Index badge
+Top-left corner overlay. --bg-base at 80% opacity. Caption size. e.g. '01'
+Status indicator
+Top-right corner. Dot: grey=empty, amber=generating, green=has asset.
+Prompt excerpt
+Bottom 25% of card. Body Small. Single line, truncated with ellipsis. --text-secondary.
+Model name
+Below prompt. Caption. --text-muted. Truncated.
+Action bar
+Appears on hover. Full-width strip at card bottom. Icon buttons: Regenerate, Canvas, Duplicate, Delete.
+Selected state
+2px --accent border. --accent-subtle background on info area.
+Generating state
+Animated shimmer over thumbnail. Indeterminate progress bar at card bottom edge.
+11.6.2 Storyboard Toolbar
+Left group: zoom level selector (12up / 6up / 3up / 1up), view toggle (grid / list).
+Center: project title (read-only display).
+Right group: Generate All button (--accent fill), Submit to Engineering button (visible only in CreativeActive, --accent fill, disabled and greyed when any keyframe has no selected asset with a tooltip explaining why).
+11.7 Timeline View
+The Timeline is the Engineer persona's primary workspace. It occupies the full Main Canvas area split into two vertical zones: the Preview zone (top 35%) and the Timeline zone (bottom 65%). The split is user-resizable.
+11.7.1 Preview Zone
+Shows the frame at the current playhead position. Black background. Asset renders centered with letterboxing.
+Playback controls centered below preview: Skip to start, Step back 1 frame, Play/Pause, Step forward 1 frame, Skip to end. Current timecode display (HH:MM:SS:FF format).
+Render button in top-right of preview zone. Only active when all VideoClips have render_state='done'.
+11.7.2 Timeline Zone
+Element
+Spec
+Time ruler
+Fixed top of timeline zone. Shows timecode markers at interval appropriate to current zoom level. Playhead is a vertical line extending the full height of the timeline, draggable.
+Track headers
+Fixed left column, 160px wide. Shows track name (editable on double-click), track type icon, and track controls (mute for audio, lock, visibility for video).
+Track lanes
+Horizontal lanes to the right of track headers. Variable height: video tracks 64px, audio tracks 40px, controlnet tracks 32px.
+VideoClip block
+Rounded 4px. Background --bg-elevated, border 1px --border. Top strip (8px) filled with --accent at 60% opacity. Shows: clip thumbnail (first frame) on left, model name and frame count as Caption text.
+AudioClip block
+Rounded 4px. Background --bg-elevated. Top strip color by subtype: music=--info, sfx=--success, tts=--accent, lipsync=--warning. Shows waveform preview when asset exists.
+Unrendered clip
+Dashed border instead of solid. --text-muted label 'Unrendered'.
+Rendering clip
+Animated left-to-right progress fill over the clip block using --accent at 30% opacity. Percentage label centered.
+Add track button
+Below last track of each type. Dashed border row with + icon. Click to add track of that type.
+11.8 Right Panel Inspector
+The inspector is context-sensitive. It shows the properties of whatever is currently selected. If nothing is selected it shows a placeholder: centered icon and 'Select an item to inspect'.
+Selection
+Inspector Content
+Keyframe
+Sections (collapsible): Model + LoRA selector, Prompt (positive + negative + scope toggle), Generation params (from param_schema — rendered dynamically), ControlNet (collapsible, off by default), Seed + variation controls, Candidate carousel (shown when candidates > 1), Generate button.
+VideoClip
+Sections: Source asset thumbnail, Mode selector (T2V/I2V/V2V), Model + LoRA selector, Prompt, Generation params, ControlNet, RIFE settings, Generate button, render_state display.
+AudioClip
+Sections: Subtype selector, Prompt (music/sfx/tts) or sync target (lipsync), Model source toggle (local/API), Mix controls (volume, fade in/out, pan, loop), Generate button.
+Job (from log panel)
+Job type, status badge, progress bar, current step / total steps, ETA, GPU target, VRAM estimate vs actual, cost estimate vs actual (Vast.ai only), error details if failed.
+11.9 Interaction Patterns
+11.9.1 Command Palette
+Triggered by Cmd+K (Mac) or Ctrl+K (Windows/Linux). Full-screen overlay with centered search input.
+Searches across: navigation destinations, project actions (New Keyframe, Submit Handoff, Start Render), model registry (jump to model), recent jobs, settings pages.
+Results grouped by category with keyboard navigation (arrow keys, Enter to execute, Escape to close).
+Implementation: cmdk library (works with shadcn/ui Command component).
+11.9.2 Drag and Drop
+Storyboard: keyframe cards are draggable to reorder. Drop target shows a 2px --accent insertion line between cards.
+Storyboard to Timeline: keyframe asset cards can be dragged from the Storyboard Import panel directly onto a video track lane to create a VideoClip.
+Timeline clips: draggable horizontally within their track lane to reposition. Drag to a different track lane of the same type to move tracks.
+Timeline clip trim: drag left or right edge of a clip to adjust start_ms / end_ms. Edge shows a resize cursor on hover.
+Implementation: @dnd-kit/core + @dnd-kit/sortable. Do not use react-beautiful-dnd (deprecated).
+11.9.3 Keyboard Shortcuts
+Shortcut
+Action
+Context
+Cmd/Ctrl + K
+Open command palette
+Global
+Cmd/Ctrl + S
+Manual save (snapshot)
+Global
+Cmd/Ctrl + Z
+Undo (canvas editor only)
+Canvas Editor
+Cmd/Ctrl + Shift + Z
+Redo (canvas editor only)
+Canvas Editor
+Space
+Play / Pause
+Timeline
+Left / Right arrow
+Step 1 frame
+Timeline
+Shift + Left / Right
+Step 10 frames
+Timeline
+Home / End
+Jump to start / end
+Timeline
++  /  -
+Zoom in / out (timeline)
+Timeline
+G
+Queue generation for selected keyframe
+Storyboard
+D
+Duplicate selected keyframe
+Storyboard
+Delete / Backspace
+Delete selected keyframe (with confirm dialog)
+Storyboard
+1 / 2 / 3 / 4
+Switch storyboard zoom (1up / 3up / 6up / 12up)
+Storyboard
+Escape
+Close modal / deselect / close command palette
+Global
+Keyboard shortcut reference is accessible via Cmd/Ctrl + ? or via the Help menu.
+11.9.4 Resizable Panels
+Left sidebar: drag handle on its right edge. Min 48px (icon rail), max 320px. Default 220px.
+Right inspector panel: drag handle on its left edge. Min 280px, max 480px. Default 320px.
+Timeline / Preview split: drag handle on the horizontal boundary. Min 20% / max 60% for each zone. Default 35% preview / 65% timeline.
+Panel sizes persisted to localStorage under key 'aimm_panel_prefs'. Restored on next session load.
+Implementation: react-resizable-panels library.
+11.10 Progress and Feedback
+11.10.1 Progress Meters
+Every waiting state shows a progress meter. There are no spinner-only states in this application.
+Determinate progress (job with known steps): horizontal bar fill using --accent. Percentage label right-aligned. ETA shown in --text-secondary below bar.
+Indeterminate progress (connecting, loading model): animated shimmer bar using --accent at 40% opacity.
+Job progress surfaces: keyframe card bottom strip (image gen), timeline clip fill (video gen), inspector panel progress bar (any active job on selected entity), global status bar in top bar (most recent active job).
+11.10.2 Toast Notifications
+Implementation: sonner library (works natively with shadcn/ui).
+Position: bottom-right, max 3 visible at once.
+Duration: info/success = 4 seconds. Warning = 6 seconds. Error = persists until dismissed.
+Toast types and colors: success (--success), error (--error), warning (--warning), info (--info).
+Toasts are used for: job completion, audio API fallback, auto-save confirmation, OAuth merge confirmation.
+Toasts are NOT used for: job failures requiring user action (use modal), VRAM routing decision (use modal), handoff events (use notification panel).
+11.10.3 Modal Dialogs
+Used for: critical errors, VRAM / Vast.ai routing confirmation, destructive confirmations (delete project, delete model), forced password change, handoff confirmation.
+Modals use shadcn/ui Dialog component. Max width 560px. Always include a clear title, body explanation, and explicit action buttons.
+Destructive action buttons use --error color. Confirmatory action buttons use --accent color. Cancel always available via button and Escape key.
+11.11 Forms and Inputs
+All form inputs use shadcn/ui Input, Textarea, Select, Checkbox, Switch, Slider components.
+Validation: inline error messages appear below the field on blur or submit attempt. Error text uses --error color, 12px.
+Required fields are marked with an asterisk (*) in the label.
+Sliders (generation params, LoRA weights, mix controls): show current value in an editable numeric input to the right of the slider. User can type a value directly.
+Prompt textareas: monospace font (JetBrains Mono), min 3 rows, auto-expand to max 8 rows, then scroll.
+LoRA stack builder: each LoRA row shows name, architecture badge, weight slider (0.0–2.0), and a remove button. Add LoRA opens a searchable popover filtered to compatible LoRAs.
+11.12 Log Viewer
+A collapsible panel accessible from the bottom of the application shell (drag handle at bottom of Main Canvas). Default collapsed. Expands upward to 30% of viewport height.
+Displays structured log lines streamed from /ws/logs. Columns: timestamp, level badge, message, trace_id (truncated), job_id link.
+Level badges: DEBUG (--text-muted), INFO (--info), WARNING (--warning), ERROR (--error), CRITICAL (--error, bold).
+Filter controls: level dropdown (min level selector), project filter, trace_id search input, job_id search input, time range picker.
+Clicking a job_id link in a log entry navigates to and selects that job in the job queue panel.
+Auto-scroll to bottom when new lines arrive, unless user has scrolled up (scroll-lock detection).
+11.13 Empty and Loading States
+Surface
+Empty State
+Loading State
+Storyboard
+Centered illustration + 'No keyframes yet' + 'Add Keyframe' button.
+Skeleton cards matching the current zoom grid layout.
+Timeline
+Centered text: 'Import keyframes from the Storyboard to begin.' with arrow pointing to Storyboard Import panel.
+Track lane skeletons.
+Model Library
+'No models registered. Add a model from HuggingFace or Civitai.' with Add Model button.
+Skeleton rows.
+Right Inspector
+Centered icon + 'Select an item to inspect'.
+Skeleton form fields.
+Log Viewer
+'No log entries yet.'
+Connecting... with shimmer bar.
+11.14 Accessibility
+All interactive elements MUST have accessible labels (aria-label or visible text). shadcn/ui components provide this by default — do not override aria attributes without a documented reason.
+Focus management: modal dialogs MUST trap focus. Command palette MUST trap focus. On close, focus returns to the triggering element.
+Keyboard navigation MUST work for all primary workflows: creating a keyframe, queuing a generation job, navigating between panels.
+Color contrast: all text on background combinations MUST meet WCAG AA (4.5:1 for body text, 3:1 for large text). The defined color tokens above are designed to meet this requirement in dark mode.
+Do not rely on color alone to convey state — all status indicators pair color with an icon or text label.
+Section 12: Build Instructions for the Agent
+This section tells the agent exactly how to sequence the build, how to manage the API contract, how to structure the frontend during backend development, and what tests to write. Follow this section in order. Do not deviate from the sequence without a documented reason.
+12.1 Build Sequence
+The build is divided into six phases executed in strict order. Do not begin a phase until the prior phase is complete and its verification checklist passes.
+Phase
+Name
+Deliverables
+Done When
+1
+Foundation
+Repo structure, venv, requirements.txt, setup.sh, start.sh, Alembic configured, all 22 SQLAlchemy models defined, initial migration generated and applied, bootstrap seed (admin/admin account + all required global Settings), pytest configured.
+python setup.sh runs without error on a clean machine. alembic upgrade head succeeds. The admin account exists in the database. All 22 entity tables exist with correct columns.
+2
+Backend API
+All FastAPI routers scaffolded for every endpoint group in Section 9.1. Every endpoint returns a stub response (HTTP 200 + empty data structure matching the Pydantic response schema). Pydantic request and response models defined for every endpoint. FastAPI app starts and /docs renders the full OpenAPI schema.
+fastapi dev backend/main.py starts without error. GET /docs returns HTTP 200. Every endpoint listed in Section 9.1 appears in the OpenAPI schema with correct request and response shapes.
+3
+Backend Logic
+Business logic implemented for all endpoints in domain order: Auth + Users, Projects + Members + Handoffs, Storyboard + Keyframes, Timeline + Tracks + Clips, Assets, Jobs + Batches, Model Registry + LoRA Registry, Settings, Snapshots, Notifications. Celery worker configured with all job task stubs. Redis pub/sub progress streaming wired. WebSocket endpoints live.
+All acceptance criteria in Sections 4, 5, 6, and 8 pass against the real backend using pytest integration tests.
+4
+AI Pipelines
+Hardware Profile Service implemented and tested. Diffusers pipelines wired: T2I, I2I, inpaint, outpaint, LTX-V I2V, WAN 2.2 I2V. ControlNet pipeline wired. RIFE interpolation wired. AudioCraft, Coqui TTS, wav2lip wired. Vast.ai dispatch wired. All pipelines run as Celery tasks and stream progress via Redis.
+A complete generation job can be queued via POST /jobs, executes on the Celery worker, streams progress via WebSocket, and produces a valid output Asset file on disk.
+5
+Frontend
+React + Vite app scaffolded. shadcn/ui installed and configured with the color tokens from Section 11.2. MSW mock layer removed (see Section 12.3). All views implemented: Login, Admin panel, Storyboard, Timeline, Model Library, Settings. All interaction patterns from Section 11.9 implemented. All WebSocket subscriptions wired.
+A complete user workflow can be executed in the browser end-to-end: login → create project → add keyframes → generate images → submit handoff → generate video → export.
+6
+Integration and Hardening
+setup.sh and start.sh finalized and tested on a clean machine. All environment variables documented in .env.example. Log rotation configured. All open items from Section 10.1 resolved or explicitly deferred with a code comment referencing the PRD section. README written covering installation, first-run, and basic usage.
+A developer with no prior context can clone the repo, run setup.sh, run start.sh, and reach a working login page within 15 minutes.
+12.2 Repository Structure
+The agent MUST create the following directory and file structure at the start of Phase 1. Do not deviate.
+ai-movie-maker/
+  backend/
+    main.py                  # FastAPI app factory
+    config.py                # Settings loaded from environment / .env
+    database.py              # SQLAlchemy async engine + session factory
+    models/                  # SQLAlchemy ORM models (one file per entity)
+    schemas/                 # Pydantic request + response schemas
+    routers/                 # FastAPI routers (one file per endpoint group)
+    services/                # Business logic (one file per domain)
+    tasks/                   # Celery task definitions
+    pipelines/               # AI inference pipelines
+      image.py               # T2I, I2I, inpaint, outpaint
+      video.py               # LTX-V, WAN 2.2
+      audio.py               # AudioCraft, Coqui TTS, wav2lip
+      controlnet.py          # ControlNet pipeline wrappers
+      interpolation.py       # RIFE
+      hardware_profile.py    # Hardware Profile Service
+    integrations/            # External service clients
+      civitai.py
+      huggingface.py
+      vastai.py
+    migrations/              # Alembic migration files
+    tests/                   # All pytest tests
+      unit/
+      integration/
+  frontend/
+    src/
+      components/            # Reusable UI components
+        ui/                  # shadcn/ui generated components
+      views/                 # Top-level page views
+      hooks/                 # React custom hooks
+      stores/                # Zustand state stores
+      api/                   # API client (axios instance + typed request functions)
+      mocks/                 # MSW handlers (removed in Phase 5)
+      lib/                   # Utility functions
+    index.html
+    vite.config.ts
+  setup.sh
+  start.sh
+  requirements.txt
+  requirements-dev.txt
+  .env.example
+  README.md
+12.3 API Contract — Pydantic-First
+The API contract is defined through Pydantic models in backend/schemas/. FastAPI consumes these models and auto-generates the OpenAPI spec at /docs and /openapi.json. The Pydantic models are the authoritative contract — not prose, not comments, not separate documentation.
+12.3.1 Schema Conventions
+Every endpoint group has a corresponding schema file in backend/schemas/. Example: backend/schemas/keyframe.py contains KeyframeCreate, KeyframeUpdate, KeyframeResponse.
+All response schemas MUST inherit from a base class that includes id (uuid) and created_at (datetime).
+All list endpoints return a paginated envelope: { items: List[T], total: int, page: int, page_size: int }.
+All error responses return: { error_code: str, message: str, detail: Any | None }. The error_code field MUST match the codes defined in this PRD (e.g. 'account_pending_approval', 'password_change_required').
+UUIDs are serialized as strings in JSON responses.
+Datetimes are serialized as ISO 8601 strings with UTC timezone offset.
+JSONB fields (lora_stack, params, param_schema, candidate_asset_ids) are serialized as their native JSON structure — not as escaped strings.
+12.3.2 WebSocket Message Envelope
+All WebSocket messages use a consistent envelope. The agent MUST use exactly this structure for all three WebSocket endpoints.
+// Job progress  (/ws/jobs/{job_id})
+{ type:progress, job_id:uuid, progress_pct:0-100, current_step:int, total_steps:int, eta_seconds:int, status:running }
+// Job terminal states
+{ type:done, job_id:uuid, output_asset_id:uuid }
+{ type:failed, job_id:uuid, error_code:str, error_msg:str }
+// Project events  (/ws/projects/{project_id})
+{ type:state_change, project_id:uuid, new_state:str, actor_id:uuid }
+{ type:asset_created, project_id:uuid, asset_id:uuid, entity_type:str, entity_id:uuid }
+{ type:handoff_event, project_id:uuid, event:submitted|accepted|declined }
+// Log stream  (/ws/logs)
+{ type:log, timestamp:ISO8601, level:str, message:str, trace_id:uuid, job_id:uuid|null, project_id:uuid|null }
+12.3.3 Frontend API Client
+The frontend API client lives in frontend/src/api/. It is a typed wrapper around axios.
+One file per resource group matching the backend router structure: auth.ts, projects.ts, keyframes.ts, jobs.ts, etc.
+Every API function is async and returns a typed response matching the Pydantic response schema. No untyped any returns.
+The axios instance is configured with: base URL from VITE_API_URL env var, automatic JWT token injection via request interceptor, automatic token refresh via response interceptor on 401.
+During Phase 4 frontend development, the axios instance is intercepted by MSW (Mock Service Worker) which returns mock responses matching the Pydantic schemas. MSW handlers live in frontend/src/mocks/. They are removed and the real axios instance is used in Phase 5.
+12.4 Frontend State Management
+State management: Zustand. One store per domain: useProjectStore, useStoryboardStore, useTimelineStore, useJobStore, useAuthStore.
+Server state (data fetched from API): TanStack Query (React Query). All API fetches go through useQuery / useMutation hooks. Do not store server data in Zustand — Zustand is for UI state only (selected keyframe id, active panel, command palette open state, etc.).
+WebSocket state is managed in a custom hook useWebSocket that wraps the native WebSocket, handles reconnection, and dispatches incoming messages to the appropriate Zustand store or React Query cache invalidation.
+12.5 Testing Requirements
+The agent MUST write tests as part of normal feature development — not as a separate pass at the end. Tests are written in the same phase as the feature they cover.
+12.5.1 Test Configuration
+Test runner: pytest with pytest-asyncio for async tests.
+Test database: isolated temporary SQLite database. A pytest fixture creates a fresh database, runs all Alembic migrations to head, and tears down after each test module. Tests never touch the development or production database.
+Test client: httpx.AsyncClient with the FastAPI app mounted directly (no running server required).
+Celery tasks: tested in CELERY_TASK_ALWAYS_EAGER=True mode — tasks execute synchronously in the test process.
+AI pipelines: mocked in all tests. No actual model inference in the test suite. Pipeline calls are replaced with a fixture that returns a pre-generated test asset file.
+External APIs (Civitai, HuggingFace, Vast.ai): mocked with responses using the respx library.
+12.5.2 What to Test
+Layer
+Test Type
+Coverage Requirement
+Location
+SQLAlchemy models
+Unit
+All relationships, cascade deletes, and field constraints.
+tests/unit/test_models.py
+Service functions
+Unit
+All business logic functions. Every branch of state machine transitions. Role enforcement logic.
+tests/unit/test_services/
+API endpoints
+Integration
+Every endpoint: happy path + primary error cases (401, 403, 404, 422). Role access matrix from Section 2.2 — each restricted endpoint tested with an unauthorized role.
+tests/integration/test_routers/
+Auth flows
+Integration
+Login success/failure, token refresh, force_password_change gate, approval_state gate, rate limiting, OAuth callback (mocked provider).
+tests/integration/test_auth.py
+Job queue
+Integration
+Job creation, priority ordering, cancellation, retry on failure, batch status updates, progress streaming via Redis pub/sub.
+tests/integration/test_jobs.py
+Snapshot system
+Integration
+Auto-save trigger, manual save, tier filtering, API path hiding, rollback restores correct entity state.
+backend/tests/integration/test_routers/test_snapshots.py
+Migration/schema parity
+Integration
+Alembic upgrade head creates columns required by runtime models, including snapshots.tier.
+backend/tests/integration/test_migrations.py
+Hardware Profile Service
+Unit
+All four GPU class detection branches. Override via Setting. Fallback on torch.compile failure.
+tests/unit/test_hardware_profile.py
+Pipeline tasks
+Unit (mocked)
+Job dispatch, progress emission, success/failure handling, VRAM estimation. No real inference.
+tests/unit/test_pipelines/
+12.5.3 Test Naming Convention
+Test functions follow the pattern: test_{feature}_{scenario}_{expected_outcome}.
+Examples: test_login_with_valid_credentials_returns_token, test_submit_handoff_as_engineer_returns_403, test_job_retry_on_failure_increments_retry_count.
+Each integration test for a role-restricted endpoint must include at least: one test with the authorized role (expect 200/201) and one with an unauthorized role (expect 403).
+12.5.4 Running Tests
+# All tests
+pytest
+# Unit tests only
+pytest tests/unit/
+# Integration tests only
+pytest tests/integration/
+# Specific module
+pytest tests/integration/test_auth.py -v
+Agent Note: Do not proceed from Phase 2 to Phase 3 until pytest tests/integration/test_routers/ passes for all stub endpoints (HTTP 200 with correct empty response shape). Do not proceed from Phase 3 to Phase 4 until all integration tests pass. These are hard gates.
+12.6 Environment Variables
+All configuration is via environment variables loaded from a .env file in development. The agent MUST create .env.example with every variable listed below. Never hardcode any of these values in source code.
+Variable
+Required
+Default
+Description
+DATABASE_URL
+Yes
+sqlite+aiosqlite:///./data/dev.db
+SQLAlchemy async database URL.
+REDIS_URL
+Yes
+redis://localhost:6379/0
+Redis connection URL for Celery and pub/sub.
+SECRET_KEY
+Yes
+(none — must be set)
+JWT signing secret. Generate with: openssl rand -hex 32
+ENVIRONMENT
+No
+development
+'development' or 'production'. Controls debug mode and log level.
+LOG_LEVEL
+No
+INFO
+Minimum log level. DEBUG, INFO, WARNING, ERROR, CRITICAL.
+STORAGE_BASE_PATH
+No
+/opt/aimoviemaker
+Root path for all file storage.
+VITE_API_URL
+Frontend
+http://localhost:8000
+Backend API base URL. Used by the React frontend.
+VITE_WS_URL
+Frontend
+ws://localhost:8000
+Backend WebSocket base URL.
+Agent Note: All other configuration (API keys, SMTP credentials, OAuth client IDs) is stored in the Setting table managed at runtime by the Admin, not in environment variables. Environment variables are for infrastructure only.
+Section 13: Critical API Schemas
+This section defines the exact request and response JSON shapes for the 10 most critical API endpoints and WebSocket messages. These schemas are the contract. The Pydantic models in backend/app/schemas/ MUST produce output that matches these shapes exactly. The generated TypeScript client MUST be derived from these shapes via the OpenAPI spec.
+Notation: ? suffix = optional field (may be omitted or null). All datetime fields are ISO 8601 strings in UTC. All id fields are UUID v4 strings.
+13.1 POST /auth/login
+Request
+{ "email": "string",
+  "password": "string" }
+Response 200
+{ "access_token": "string",          // JWT, 15 min expiry
+  "refresh_token": "string",         // opaque token, 7 day expiry
+  "token_type": "bearer",
+  "user": {
+    "id": "uuid",
+    "email": "string",
+    "full_name": "string",
+    "global_role": "admin" | "user",
+    "force_password_change": "bool",
+    "approval_state": "approved" | "pending" | "rejected"
+  }
+}
+Error Responses
+HTTP
+error_code
+Condition
+401
+invalid_credentials
+Email not found or password incorrect.
+403
+account_pending_approval
+User exists but approval_state='pending'.
+403
+account_deactivated
+User exists but is_active=false.
+403
+password_change_required
+Credentials valid but force_password_change=true.
+429
+rate_limit_exceeded
+5+ failed attempts within 15-minute window.
+All error responses use the envelope: { error_code: string, message: string }
+13.2 POST /projects and GET /projects/{id}
+POST /projects — Request
+{ "title": "string",                 // required
+  "description": "string?",
+  "fps": "int?",                     // default 24
+  "resolution_w": "int?",            // default 1280
+  "resolution_h": "int?"             // default 720
+}
+ProjectResponse (used by POST 201 and GET 200)
+{ "id": "uuid",
+  "title": "string",
+  "description": "string?",
+  "state": "draft" | "creative_active" | "pending_handoff"
+          | "eng_active" | "pending_return" | "completed",
+  "created_by": "uuid",
+  "created_at": "datetime",
+  "updated_at": "datetime",
+  "global_negative_prompt": "string?",
+  "auto_save_interval_s": "int?",
+  "fps": "int",
+  "resolution_w": "int",
+  "resolution_h": "int",
+  "members": [                        // always included in GET /{id}
+    { "user_id": "uuid",
+      "full_name": "string",
+      "email": "string",
+      "role": "creative" | "engineer" | "viewer",
+      "assigned_at": "datetime"
+    }
+  ]
+}
+13.3 POST /projects/{id}/keyframes and GET /projects/{id}/keyframes
+POST — Request
+{ "index": "int?",                   // if omitted, appends to end
+  "positive_prompt": "string?",
+  "negative_prompt": "string?",
+  "neg_prompt_scope": "keyframe" | "global",  // default "global"
+  "mode": "t2i" | "i2i" | "inpaint" | "outpaint",  // default "t2i"
+  "model_id": "uuid?",
+  "seed": "int?",                    // default -1
+  "seed_mode": "fixed" | "random" | "variation",  // default "random"
+  "variation_count": "int?",         // default 1
+  "lora_stack": [ { "lora_id": "uuid", "weight": "float" } ]?,
+  "params": "object?"               // model-specific params
+}
+KeyframeResponse (used by POST 201, GET list items, GET /{kid})
+{ "id": "uuid",
+  "storyboard_id": "uuid",
+  "index": "int",
+  "positive_prompt": "string?",
+  "negative_prompt": "string?",
+  "neg_prompt_scope": "keyframe" | "global",
+  "mode": "t2i" | "i2i" | "inpaint" | "outpaint",
+  "seed": "int",
+  "seed_mode": "fixed" | "random" | "variation",
+  "variation_count": "int",
+  "model_id": "uuid?",
+  "model_name": "string?",           // display_name from ModelRegistry, joined
+  "lora_stack": [ { "lora_id": "uuid", "weight": "float" } ],
+  "params": "object",
+  "cn_enabled": "bool",
+  "cn_type": "depth" | "canny" | "pose" | "reference" | null,
+  "cn_control_asset_id": "uuid?",
+  "cn_strength": "float?",
+  "cn_start_pct": "float?",
+  "cn_end_pct": "float?",
+  "selected_asset_id": "uuid?",
+  "selected_asset_thumbnail_url": "string?",  // GET /assets/{id}/thumbnail
+  "candidate_asset_ids": ["uuid"],
+  "candidate_thumbnail_urls": ["string"],
+  "created_at": "datetime",
+  "updated_at": "datetime"
+}
+13.4 POST /jobs and GET /jobs/{id}
+POST /jobs — Request
+{ "type": "image_generation" | "video_generation" | "audio_generation"
+        | "interpolation" | "inpaint" | "outpaint" | "render" | "export",
+  "source_entity_type": "keyframe" | "videoclip" | "audioclip" | "project",
+  "source_entity_id": "uuid",
+  "project_id": "uuid",
+  "batch_id": "uuid?",
+  "gpu_target": "local" | "vastai",   // default "local"
+  "user_ack": "bool",                 // MUST be true if gpu_target="vastai"
+  "priority": "high" | "medium" | "normal" | "low"  // default "normal"
+}
+JobResponse (used by POST 201 and GET 200)
+{ "id": "uuid",
+  "project_id": "uuid",
+  "user_id": "uuid",
+  "batch_id": "uuid?",
+  "type": "string",
+  "source_entity_type": "string",
+  "source_entity_id": "uuid",
+  "status": "queued" | "running" | "done" | "failed" | "cancelled",
+  "priority": "high" | "medium" | "normal" | "low",
+  "queue_position": "int?",
+  "gpu_target": "local" | "vastai",
+  "vram_estimate_mb": "int?",
+  "vram_actual_mb": "int?",
+  "cost_estimate_usd": "string?",     // NUMERIC serialized as string
+  "cost_actual_usd": "string?",
+  "progress_pct": "int",
+  "current_step": "int?",
+  "total_steps": "int?",
+  "eta_seconds": "int?",
+  "retry_count": "int",
+  "error_code": "string?",
+  "error_msg": "string?",
+  "queued_at": "datetime",
+  "started_at": "datetime?",
+  "completed_at": "datetime?"
+}
+POST /jobs Validation Rules
+If gpu_target='vastai' and user_ack=false: return HTTP 422 with error_code='vastai_ack_required'.
+If source_entity_id does not exist or belongs to a different project: return HTTP 404.
+If the requesting user does not have the required role for the job type: return HTTP 403.
+If VRAM estimate exceeds local capacity and gpu_target='local': return HTTP 422 with error_code='insufficient_vram', vram_estimate_mb, vram_available_mb, and a vastai_offers array (top 3 offers from Vast.ai) in the response body.
+13.5 WebSocket /ws/jobs/{job_id} — Message Envelope
+The WebSocket endpoint streams newline-delimited JSON messages. Each message is one of three types, identified by the 'event' field.
+progress event (sent every 500ms during active generation)
+{ "event": "progress",
+  "job_id": "uuid",
+  "progress_pct": "int",             // 0-100
+  "current_step": "int",
+  "total_steps": "int",
+  "eta_seconds": "int?",
+  "status": "running"
+}
+complete event (sent once on job completion)
+{ "event": "complete",
+  "job_id": "uuid",
+  "status": "done",
+  "output_asset_id": "uuid?",        // null for render/export jobs
+  "output_asset_ids": ["uuid"],      // all candidate asset IDs when variation_count > 1
+  "vram_actual_mb": "int?",
+  "cost_actual_usd": "string?"
+}
+error event (sent once on job failure)
+{ "event": "error",
+  "job_id": "uuid",
+  "status": "failed",
+  "error_code": "string",
+  "error_msg": "string",
+  "retry_count": "int",
+  "will_retry": "bool"              // true if retry_count < max_retries
+}
+Client Reconnect: On WebSocket disconnect, the client MUST reconnect with exponential backoff (initial 1s, max 30s). On reconnect, the client MUST call GET /jobs/{job_id} to get the current state before re-subscribing, in case the job completed during the disconnect window.
+13.6 GET /projects/{id}/storyboard
+Response 200
+{ "id": "uuid",
+  "project_id": "uuid",
+  "created_at": "datetime",
+  "updated_at": "datetime",
+  "keyframes": [                      // ordered by index ascending
+    { ...KeyframeResponse }            // full KeyframeResponse for each
+  ],
+  "keyframe_count": "int",
+  "unrendered_count": "int"          // keyframes with no selected_asset_id
+}
+13.7 POST /projects/{id}/handoffs
+Request
+{ "direction": "creative_to_eng" | "eng_to_creative",
+  "notes": "string?"                // optional message to recipient
+}
+Response 201
+{ "id": "uuid",
+  "project_id": "uuid",
+  "direction": "creative_to_eng" | "eng_to_creative",
+  "initiated_by": "uuid",
+  "accepted_by": "uuid?",
+  "initiated_at": "datetime",
+  "accepted_at": "datetime?",
+  "notes": "string?",
+  "project_state": "string"         // new project state after this handoff
+}
+Validation Rules
+direction='creative_to_eng': requesting user MUST have role='creative' on this project AND project.state MUST be 'creative_active'. Returns HTTP 409 with error_code='invalid_state' otherwise.
+direction='eng_to_creative': requesting user MUST have role='engineer' AND project.state MUST be 'eng_active'. Returns HTTP 409 otherwise.
+On success: project.state transitions to 'pending_handoff' (creative_to_eng) or 'pending_return' (eng_to_creative). Notification dispatched to recipient.
+PATCH /projects/{id}/handoffs/{hid}/accept — Response 200
+{ ...HandoffResponse with accepted_by and accepted_at populated,
+  "project_state": "string"         // new project state
+}
+13.8 GET /models and POST /models
+ModelResponse (used in GET list items and POST 201)
+{ "id": "uuid",
+  "name": "string",
+  "display_name": "string",
+  "type": "image" | "video" | "audio",
+  "architecture": "string",
+  "version": "string?",
+  "vram_floor_mb": "int",
+  "vram_recommended_mb": "int",
+  "supports_cpu_offload": "bool",
+  "supports_fp8": "bool",
+  "supports_fp16": "bool",
+  "min_compute_capability": "string?",
+  "param_schema": "object",          // full param_schema JSON
+  "compatible_lora_architectures": ["string"],
+  "lora_weight_min": "float",
+  "lora_weight_max": "float",
+  "max_lora_stack_size": "int",
+  "source_url": "string?",
+  "hf_repo_id": "string?",
+  "civitai_id": "string?",
+  "file_size_bytes": "int?",
+  "is_active": "bool",
+  "added_by": "uuid",
+  "added_at": "datetime"
+  // storage_path is NEVER included in API responses (server-side only)
+}
+POST /models — Request
+{ "source": "huggingface" | "civitai" | "local",
+  "hf_repo_id": "string?",           // required if source="huggingface"
+  "civitai_id": "string?",           // required if source="civitai"
+  "local_path": "string?",           // required if source="local"
+  "name": "string",                  // required for all sources
+  "display_name": "string",
+  "type": "image" | "video" | "audio",
+  "architecture": "string",
+  "vram_floor_mb": "int",
+  "vram_recommended_mb": "int",
+  "param_schema": "object"
+}
+POST /models enqueues a background download job (source=huggingface or civitai) or validates and registers immediately (source=local). Returns HTTP 202 Accepted with a job_id for download sources, HTTP 201 Created with ModelResponse for local source.
+13.9 POST /projects/{id}/videoclips and GET
+POST — Request
+{ "track_id": "uuid",                // must be type="video"
+  "start_ms": "int",
+  "end_ms": "int",
+  "source_asset_id": "uuid?",
+  "mode": "t2v" | "i2v" | "v2v",   // default "i2v"
+  "model_id": "uuid?",
+  "positive_prompt": "string?",
+  "negative_prompt": "string?",
+  "seed": "int?",
+  "frames": "int?",
+  "fps": "int?",
+  "motion_strength": "float?",
+  "steps": "int?",
+  "cfg_scale": "float?",
+  "lora_stack": [ { "lora_id": "uuid", "weight": "float" } ]?,
+  "params": "object?",
+  "cn_enabled": "bool?",
+  "cn_type": "string?",
+  "cn_control_asset_id": "uuid?",
+  "cn_strength": "float?",
+  "cn_start_pct": "float?",
+  "cn_end_pct": "float?",
+  "rife_enabled": "bool?",
+  "rife_multiplier": "2x" | "4x",
+  "scene_cut_detect": "bool?"
+}
+VideoClipResponse
+{ "id": "uuid",
+  "track_id": "uuid",
+  "start_ms": "int",
+  "end_ms": "int",
+  "duration_ms": "int",              // computed: end_ms - start_ms
+  "order": "int",
+  "source_asset_id": "uuid?",
+  "source_thumbnail_url": "string?",
+  "output_asset_id": "uuid?",
+  "output_thumbnail_url": "string?",
+  "job_id": "uuid?",
+  "render_state": "unrendered" | "rendering" | "done" | "error",
+  "mode": "t2v" | "i2v" | "v2v",
+  "model_id": "uuid?",
+  "model_name": "string?",
+  "lora_stack": [ { "lora_id": "uuid", "weight": "float" } ],
+  "positive_prompt": "string?",
+  "negative_prompt": "string?",
+  "seed": "int",
+  "frames": "int?",
+  "fps": "int?",
+  "motion_strength": "float?",
+  "steps": "int?",
+  "cfg_scale": "float?",
+  "params": "object",
+  "cn_enabled": "bool",
+  "cn_type": "string?",
+  "cn_control_asset_id": "uuid?",
+  "cn_strength": "float?",
+  "cn_start_pct": "float?",
+  "cn_end_pct": "float?",
+  "rife_enabled": "bool",
+  "rife_multiplier": "2x" | "4x",
+  "scene_cut_detect": "bool",
+  "created_at": "datetime",
+  "updated_at": "datetime"
+}
+13.10 GET /projects/{id}/timeline
+Response 200 — Full Timeline with Tracks and Clips
+{ "id": "uuid",
+  "project_id": "uuid",
+  "duration_ms": "int",
+  "fps": "int",
+  "resolution_w": "int",
+  "resolution_h": "int",
+  "updated_at": "datetime",
+  "tracks": [
+    { "id": "uuid",
+      "type": "video" | "audio" | "controlnet",
+      "name": "string",
+      "order": "int",
+      "muted": "bool",
+      "locked": "bool",
+      "visible": "bool",
+      "video_clips": [               // only present when type="video"
+        { ...VideoClipResponse }
+      ],
+      "audio_clips": [               // only present when type="audio"
+        { "id": "uuid",
+          "track_id": "uuid",
+          "start_ms": "int",
+          "end_ms": "int",
+          "duration_ms": "int",
+          "order": "int",
+          "output_asset_id": "uuid?",
+          "job_id": "uuid?",
+          "render_state": "unrendered" | "rendering" | "done" | "error",
+          "subtype": "music" | "sfx" | "tts" | "lipsync",
+          "prompt": "string?",
+          "model_id": "uuid?",
+          "model_name": "string?",
+          "model_source": "local" | "api",
+          "api_provider": "string?",
+          "volume": "float",
+          "fade_in_ms": "int",
+          "fade_out_ms": "int",
+          "pan": "float",
+          "loop": "bool",
+          "sync_to_asset_id": "uuid?",
+          "sync_mode": "free" | "locked",
+          "created_at": "datetime",
+          "updated_at": "datetime"
+        }
+      ],
+      "control_assets": [            // only present when type="controlnet"
+        { "asset_id": "uuid",
+          "start_ms": "int",
+          "end_ms": "int",
+          "thumbnail_url": "string?"
+        }
+      ]
+    }
+  ]
+}
+Timeline Load: GET /projects/{id}/timeline MUST always return the full nested payload (tracks + all clips). There is no paginated or partial timeline response. The frontend renders the full timeline from this single response and updates individual clips via PATCH endpoints as edits occur.
+13.11 Common Response Conventions
+Paginated List Response
+All GET list endpoints that may return large result sets use this envelope:
+{ "items": [ ...ResourceResponse ],
+  "total": "int",
+  "page": "int",
+  "page_size": "int",
+  "pages": "int"
+}
+Error Response Envelope
+All error responses (4xx, 5xx) use this envelope:
+{ "error_code": "string",            // machine-readable, snake_case
+  "message": "string",              // human-readable explanation
+  "detail": "object?"               // additional context (e.g. field errors, VRAM stats)
+}
+Thumbnail URL Convention
+All thumbnail_url fields point to GET /projects/{project_id}/assets/{asset_id}/thumbnail.
+Thumbnails are JPEG, max 512x512, generated on first request and cached.
+If no asset exists yet, thumbnail_url is null — the frontend renders the empty card state.
+storage_path Security Rule
+The storage_path field on Asset, ModelRegistry, LoRARegistry, and Snapshot entities is NEVER included in any API response. It is a server-side field only. The agent MUST verify no Pydantic response schema includes storage_path.
+
+Section 14: Current Implementation Addendum — May 31, 2026
+14.1 Implementation State
+The v1 implementation is complete, including the 13-gap closure tracked in project memory and README: full timeline interaction, advanced notifications, prompt templates and history, audio waveform support, PNG sequence export, batch queue UI, hardware profiler UI, analytics, collaboration presence, ControlNet/LoRA editors, centralized error handling, tiered snapshots, and final regression cleanup.
+14.2 Snapshot Schema Update
+Snapshots include a tier field with enum values auto, manual, major, and handoff. The Alembic migration 9b0f7d2c4a91_add_snapshot_tier.py adds this column with default manual and backfills existing rows through the server default. Runtime snapshot API responses hide storage_path.
+14.3 Backend Test Update
+Backend tests now run against an isolated SQLite database upgraded with Alembic migrations. Current backend pytest coverage includes migration/schema parity and snapshot router regression tests. This prevents metadata-only tests from hiding stale migration files.
+14.4 Current Verification
+As of May 31, 2026: tests/test_phase2_compliance.py passes 88/88, tests/test_phase5.py passes 111/111, tests/test_phase6.py passes 88/88, python -m pytest backend/tests -v passes 3/3, python -m compileall -q backend passes, and cd frontend && npm run build passes with only the existing Vite chunk-size warning.

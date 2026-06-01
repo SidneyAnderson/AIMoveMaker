@@ -16,7 +16,6 @@ class SnapshotResponse(BaseModel):
     type: str
     tier: str
     label: str | None = None
-    storage_path: str
     size_bytes: int
     created_by: str | None = None
     created_at: datetime

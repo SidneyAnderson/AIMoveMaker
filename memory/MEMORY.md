@@ -44,9 +44,9 @@ User, ProjectMember, Project, HandoffRecord, Snapshot, Storyboard, Keyframe, Ass
 9. ✅ Real-time collaboration (presence users list + cursor_move protocol)
 10. ✅ Advanced ControlNet/LoRA editors (multi-stack + preprocessor selector + sliders)
 11. ✅ Deeper error handling + surfaced codes (central ERROR_CATALOG + rich UI surfacing)
-12. ✅ Tiered snapshots extra polish (batch-complete trigger + better labels + restore UX)
+12. ✅ Tiered snapshots extra polish (batch-complete trigger + better labels + restore UX; `snapshots.tier` migration added)
 13. ✅ Final regression/audit + cleanups (full tsc/py_compile, TODO sweep, legacy removal, docs refresh)
 
-**Final QA (2026-04)**: Zero TypeScript errors, all Python compiles clean, existing phase tests pass, new features (error catalog, snapshots batch trigger, advanced editors) verified. All 13 gaps complete.
+**Latest QA (2026-05-31)**: Frontend build passes, all Python compiles clean, Phase 2/5/6 verification scripts pass, and `python -m pytest backend/tests -v` now runs real backend tests (3/3 passed) covering migration/schema parity and snapshot API regressions. All 13 gaps complete.
 
-New capabilities exposed: real-time batch progress, prompt history re-apply, candidate carousels, tiered snapshot restore, etc.
+New capabilities exposed: real-time batch progress, prompt history re-apply, candidate carousels, tiered snapshot restore/filtering, etc.
