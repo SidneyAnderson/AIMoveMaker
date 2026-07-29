@@ -9,8 +9,9 @@ Checks all PRD Phase 6 deliverables:
 """
 import os
 import sys
+from pathlib import Path
 
-PROJECT_DIR = "/home/sid/AIMoveMaker"
+PROJECT_DIR = str(Path(__file__).resolve().parents[1])
 
 passed = 0
 failed = 0

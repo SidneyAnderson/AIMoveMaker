@@ -16,8 +16,10 @@ import json
 import os
 import re
 import sys
+from pathlib import Path
 
-FRONTEND_DIR = "/home/sid/AIMoveMaker/frontend"
+PROJECT_DIR = Path(__file__).resolve().parents[1]
+FRONTEND_DIR = str(PROJECT_DIR / "frontend")
 SRC_DIR = os.path.join(FRONTEND_DIR, "src")
 
 passed = 0
