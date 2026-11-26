@@ -1002,3 +1002,302 @@ graph TD
 For complete technical implementation, see `/workspace/PRD/BUILD_GUIDE.md`.
 
 For complete integration plan, see `/workspace/PRD/MovieMaker_Integration_Map.md`.
+
+---
+
+## v1.3 Addendum: Keyframe Image Model Defaults UI
+
+**Added:** November 26, 2026
+
+### StoryboardView Updates: Image Model Picker with Defaults & Gates
+
+**Purpose:** Show keyframe image model picker with live default, alternates, and license/VRAM gate badges.
+
+**Enhanced Keyframe Card:**
+```
+┌────────────────────────────────────────────────────────────┐
+│  Shot 1: Forest Opening                                    │
+├────────────────────────────────────────────────────────────┤
+│  Image Model: [Krea 2 Turbo ▾] ⚡ DEFAULT                 │
+│  ┌──────────────────────────────────────────────────────┐ │
+│  │ ✓ Krea 2 Turbo          [⚡ T2I Default] [⚠ License]  │ │
+│  │ ✓ Z-Image-Turbo         [Apache-2.0]                  │ │
+│  │ ✓ FLUX 3 Image Klein    [✏️ Edit Default] [⚠ License] │ │
+│  │ ⊗ MiniMax-H3-Image      [🔒 License] [⚠ VRAM]        │ │
+│  │ ✓ FLUX.1 [dev]          [LoRA Rich]                   │ │
+│  │ ✓ SDXL 1.0              [v1 Compatible]               │ │
+│  └──────────────────────────────────────────────────────┘ │
+│                                                            │
+│  H3 Prompt IDE (6 Sections) ...                           │
+└────────────────────────────────────────────────────────────┘
+```
+
+**Badge Key:**
+- **⚡ T2I Default:** Live T2I default for this profile
+- **✏️ Edit Default:** Live edit/consistency default
+- **⚠ License:** Requires admin license acknowledgement
+- **⚠ VRAM:** Does not fit 32 GB (IMG-GATE-02)
+- **🔒 License:** Required license missing (IMG-GATE-01)
+- **✓:** Model active & gates passed
+- **⊗:** Model blocked (gate failed or inactive)
+
+**Default Resolution (IMG-03, IMG-04, IMG-05):**
+1. **For LTX/Wan projects:**
+   - T2I default: Krea 2 Turbo → falls back to Z-Image-Turbo if Krea 2 not enabled
+   - Edit default: FLUX 3 Image Klein
+
+2. **For H3 projects:**
+   - If IMG-GATE-01 & IMG-GATE-02 both pass: MiniMax-H3-Image for T2I & edit
+   - Otherwise: same as LTX/Wan (Krea 2 Turbo / FLUX 3 Klein)
+
+3. **UI must show which default is live:**
+   ```
+   Current defaults for this project:
+   T2I: Krea 2 Turbo ⚡
+   Edit: FLUX 3 Image Klein ✏️
+   
+   (H3-Image gates not met; using global defaults)
+   ```
+
+---
+
+### License Acknowledgement Flow
+
+**Before enabling gated model (Krea 2, FLUX 3 Klein, MiniMax-H3-Image):**
+
+```
+┌────────────────────────────────────────┐
+│  License Acknowledgement Required      │
+├────────────────────────────────────────┤
+│  Krea 2 Turbo / Krea 2 Raw             │
+│                                        │
+│  License: Krea 2 Community License     │
+│                                        │
+│  Terms:                                │
+│  • Commercial use only if TTM revenue  │
+│    < USD $1,000,000                    │
+│  • Deployers MUST implement content    │
+│    filters                             │
+│  • Krea 2 Raw is HF-gated (token req.) │
+│                                        │
+│  ☐ I acknowledge the license terms    │
+│  ☐ I confirm content filter hook      │
+│     is configured                      │
+│                                        │
+│  HF Token: [••••••••••••] (gated)      │
+│                                        │
+│           [Cancel]  [Acknowledge]      │
+└────────────────────────────────────────┘
+```
+
+**MiniMax-H3-Image (US excluded territory):**
+```
+┌────────────────────────────────────────┐
+│  License Authorization Required        │
+├────────────────────────────────────────┤
+│  MiniMax-H3-Image                      │
+│                                        │
+│  ⚠ Excluded Territories:              │
+│  United States, EU, UK, South Korea    │
+│                                        │
+│  ⚠ Revenue Threshold:                 │
+│  Written authorization required if     │
+│  TTM revenue ≥ USD $1,000,000          │
+│                                        │
+│  To enable MiniMax-H3-Image:           │
+│  1. Obtain written authorization via   │
+│     https://platform.minimax.io/       │
+│        console/license                 │
+│  2. Upload authorization document      │
+│     [Upload PDF/Email...]              │
+│  3. Admin will mark as 'recorded'      │
+│                                        │
+│  Current Status: 🔒 Authorization      │
+│                   Missing              │
+│                                        │
+│           [Cancel]  [Upload Auth]      │
+└────────────────────────────────────────┘
+```
+
+---
+
+### Edit-from-Previous Keyframe Flow
+
+**Purpose:** Create next keyframe from one or more previous keyframes using edit/consistency model (IMG-07).
+
+**Workflow:**
+```
+┌────────────────────────────────────────────────────────────┐
+│  Edit from Previous Keyframe                               │
+├────────────────────────────────────────────────────────────┤
+│  Source Keyframes: (select 1-10)                           │
+│  ┌────────┐  ┌────────┐  ┌────────┐                       │
+│  │ Shot 1 │  │ Shot 2 │  │ Shot 3 │                       │
+│  │ [✓]    │  │ [✓]    │  │ [ ]    │                       │
+│  └────────┘  └────────┘  └────────┘                       │
+│                                                            │
+│  Edit Model: [FLUX 3 Image Klein ▾] ✏️ EDIT DEFAULT       │
+│  (Supports up to 10 reference images)                     │
+│                                                            │
+│  Prompt:                                                   │
+│  [Same character, now in a dimly lit cave...]             │
+│                                                            │
+│  Edit Instructions:                                        │
+│  [Maintain character consistency from Shot 1 and 2.       │
+│   Add cave environment. Darker lighting.]                 │
+│                                                            │
+│  Strength: [0.8 ═══●═══════] (0.0 = keep original)       │
+│                                                            │
+│  LoRA Stack: (filtered to FLUX 3 Klein-base)              │
+│  ✓ Character Consistency LoRA @ 0.9                       │
+│                                                            │
+│           [Cancel]  [Generate Edited Keyframe]            │
+└────────────────────────────────────────────────────────────┘
+```
+
+**Key Features:**
+1. **Multi-reference:** Select 1-10 source keyframes as references
+2. **Edit model default:** Auto-selects `default_image_edit_model_key` from profile
+3. **Model override:** Creative can pick alternate (MiniMax-H3-Image supports 16 refs)
+4. **LoRA filtering:** Only show LoRAs compatible with selected edit model
+5. **Strength slider:** Edit intensity (edit models like FLUX 3 Klein support variable strength)
+
+**API Call:**
+- `POST /api/keyframes/edit-from-previous`
+  ```json
+  {
+    "source_keyframe_ids": ["keyframe_id_1", "keyframe_id_2"],
+    "prompt": "Same character, now in a dimly lit cave...",
+    "edit_instructions": "Maintain character consistency...",
+    "strength": 0.8,
+    "model_id": null,  // Uses default_image_edit_model_key
+    "lora_ids": ["lora_id_1"]
+  }
+  ```
+
+**WebSocket Progress:** `useWebSocket('/api/ws/jobs/${jobId}')` streams generation progress
+
+---
+
+### Model Library View: Image Models Tab
+
+**Purpose:** Browse registered image models, see gates, enable/disable.
+
+**Layout:**
+```
+┌────────────────────────────────────────────────────────────┐
+│  Models & LoRAs              [Scan] [+ Import] [🎨 Images] │
+├────────────────────────────────────────────────────────────┤
+│  [Video Models] [Image Models] [LoRAs]                     │
+├────────────────────────────────────────────────────────────┤
+│  Image Models:                                             │
+│  ┌──────────────────────────────────────────────────────┐ │
+│  │ Krea 2 Turbo                           ⚡ T2I Default │ │
+│  │ License: Krea 2 Community [⚠ Requires Ack]           │ │
+│  │ VRAM: TBD (Phase 0)  │  Status: Inactive             │ │
+│  │ [Download] [Acknowledge License]                      │ │
+│  └──────────────────────────────────────────────────────┘ │
+│  ┌──────────────────────────────────────────────────────┐ │
+│  │ Z-Image-Turbo                          🔄 Fallback   │ │
+│  │ License: Apache-2.0 ✓  │  VRAM: 16 GB ✓              │ │
+│  │ Status: Active                                        │ │
+│  │ [View Details] [Disable]                              │ │
+│  └──────────────────────────────────────────────────────┘ │
+│  ┌──────────────────────────────────────────────────────┐ │
+│  │ FLUX 3 Image Klein                    ✏️ Edit Default │ │
+│  │ License: FLUX Kommunity [⚠ Requires Ack]             │ │
+│  │ VRAM: 32 GB (without upsampler) ⚠                    │ │
+│  │ Status: Inactive                                      │ │
+│  │ Note: 9B upsampler offloaded on 32 GB GPU            │ │
+│  │ [Download] [Acknowledge License]                      │ │
+│  └──────────────────────────────────────────────────────┘ │
+│  ┌──────────────────────────────────────────────────────┐ │
+│  │ MiniMax-H3-Image                      🔒 Gated       │ │
+│  │ License: MiniMax-H3-Image Community [🔒 US Excluded] │ │
+│  │ VRAM: TBD (quantization required) ⚠                  │ │
+│  │ Status: License Authorization Missing                 │ │
+│  │ [Request Authorization] [Upload Auth Doc]            │ │
+│  └──────────────────────────────────────────────────────┘ │
+└────────────────────────────────────────────────────────────┘
+```
+
+**Gate Status Indicators:**
+- **✓:** Gate passed (green)
+- **⚠:** Gate not met (amber)
+- **🔒:** License blocked (red)
+- **TBD:** Pending Phase 0 measurement
+
+---
+
+### ASCII Wireframes
+
+**Keyframe Model Picker Dropdown:**
+```
+┌───────────────────────────────────────┐
+│ Select Image Model                    │
+├───────────────────────────────────────┤
+│ ✓ Krea 2 Turbo      ⚡ T2I DEFAULT   │
+│ ✓ Z-Image-Turbo     🔄 FALLBACK      │
+│ ✓ FLUX 3 Klein      ✏️ EDIT DEFAULT  │
+│ ⊗ MiniMax-H3-Image  🔒 LICENSE ⚠ VRAM│
+│ ✓ FLUX.1 [dev]      📚 LORA RICH     │
+│ ✓ SDXL 1.0          🏛️ V1 COMPAT     │
+├───────────────────────────────────────┤
+│ ⊗ = Blocked (license or VRAM gate)   │
+└───────────────────────────────────────┘
+```
+
+**Edit-from-Previous Multi-Reference:**
+```
+┌─────────────────────────────────────────┐
+│ Select Source Keyframes (1-10):         │
+├─────────────────────────────────────────┤
+│ ┌──────┐ ┌──────┐ ┌──────┐ ┌──────┐   │
+│ │Shot 1│ │Shot 2│ │Shot 3│ │Shot 4│   │
+│ │ [✓]  │ │ [✓]  │ │ [ ]  │ │ [ ]  │   │
+│ └──────┘ └──────┘ └──────┘ └──────┘   │
+│                                         │
+│ 2 references selected                   │
+│ FLUX 3 Klein supports up to 10          │
+│                                         │
+│ [Clear All] [Select All]                │
+└─────────────────────────────────────────┘
+```
+
+---
+
+## Mermaid Flow: Image Model Default Resolution (v1.3)
+
+```mermaid
+graph TD
+    A[Keyframe Create/Edit] --> B{model_id supplied?}
+    B -->|Yes| C[Use supplied model_id]
+    B -->|No| D{Is Edit?}
+    D -->|Yes| E[Get profile.default_image_edit_model_key]
+    D -->|No| F[Get profile.default_image_model_key]
+    E --> G{Model registered & active?}
+    F --> G
+    G -->|Yes| H{Gates pass?}
+    G -->|No| I[Fallback: z_image_turbo]
+    H -->|license_authorization_status != 'required_missing'| J{fits_target_vram = true?}
+    H -->|No| I
+    J -->|Yes| K[Use default model]
+    J -->|No| I
+    I --> L{z_image_turbo active?}
+    L -->|Yes| M[Use Z-Image-Turbo]
+    L -->|No| N[Error: image_default_unavailable]
+    C --> O[Generate keyframe]
+    K --> O
+    M --> O
+```
+
+---
+
+**v1.3 UI/UX Summary:**
+- Keyframe model picker shows live defaults with badges (⚡ T2I, ✏️ Edit, 🔒 License, ⚠ VRAM)
+- License acknowledgement modals for gated models (Krea 2, FLUX 3 Klein, MiniMax-H3-Image)
+- Edit-from-previous flow with multi-reference (1-10 images) and strength slider
+- Model library "Image Models" tab with gate status indicators
+- Default resolution flow per profile (H3 vs LTX/Wan)
+- UI shows which default is live and why (gates not met, fallback active)
+

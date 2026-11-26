@@ -501,3 +501,261 @@ pytest backend/tests/integration/
 For complete file-by-file integration details, see `/workspace/PRD/MovieMaker_Integration_Map.md`.
 
 For UI/UX specifications, see `/workspace/PRD/UI_UX_SPEC.md`.
+
+---
+
+## v1.3 Addendum: Keyframe Image Model Defaults
+
+**Added:** November 26, 2026
+
+### Phase 0 Addition: Image Model VRAM Fit Checks
+
+**Goal:** Test keyframe image models on RTX 5090 32 GB to record `fits_target_vram` flags for IMG-GATE-02.
+
+**Models to test:**
+- Krea 2 Turbo (`krea/Krea-2-Turbo`) - 12B, shipped T2I default
+- Z-Image-Turbo (`Tongyi-MAI/Z-Image-Turbo`) - 6B, shipped fallback
+- FLUX 3 Image Klein (`black-forest-labs/flux-3-image-klein`) - 5.6B + 9B upsampler, shipped edit default
+- MiniMax-H3-Image (`MiniMaxAI/MiniMax-H3-Image`) - 68.65 GB BF16, H3-profile default after gates
+
+**Test script:** `scripts/spikes/image_model_vram_test.py`
+
+**Key checks:**
+- Krea 2 Turbo: 8-step T2I at 1024×1024 or 16:9 ~1080p
+- Z-Image-Turbo: 9-step T2I (official: 16 GB fit)
+- FLUX 3 Klein: test with/without 9B upsampler; offload if >32 GB
+- MiniMax-H3-Image: 16:9 keyframe (vendor 5472×3072 TBD); quantization TBD
+
+**Diffusers requirement:** `pip install diffusers>=0.43` (IMG-13)
+
+**Acceptance:** Record `fits_target_vram` for each model; IMG-GATE-02 status known for H3-Image.
+
+---
+
+### Phase 1 Addition: Image Model Registry & Profile Fields
+
+**Schema changes to `model_registry` (Section A18.4):**
+```python
+# Add to backend/models/model_registry.py:
+license_spdx_or_name: Mapped[str | None] = mapped_column(String(255), nullable=True)
+license_authorization_status: Mapped[str] = mapped_column(
+    Enum("not_required", "required_missing", "recorded", name="license_auth_status_enum"),
+    default="not_required"
+)
+fits_target_vram: Mapped[bool] = mapped_column(Boolean, default=False)
+image_role: Mapped[str | None] = mapped_column(
+    Enum("t2i", "edit", "both", "training_base", name="image_role_enum"),
+    nullable=True
+)
+machine_key: Mapped[str | None] = mapped_column(String(100), unique=True, nullable=True)
+```
+
+**Schema changes to `workflow_profile`:**
+```python
+# Add to backend/models/workflow_profile.py:
+default_image_model_key: Mapped[str | None] = mapped_column(String(100), nullable=True)  # FK to ModelRegistry.machine_key
+default_image_edit_model_key: Mapped[str | None] = mapped_column(String(100), nullable=True)
+```
+
+**Migration:** `<timestamp>_add_image_model_fields.py` (after Phase 1 core migration)
+
+---
+
+### Phase 1 Addition: Image Model Registry Seed
+
+**Seed shipped image models in `backend/seed.py`:**
+
+```python
+IMAGE_MODEL_PACK = [
+    {
+        "machine_key": "krea_2_turbo",
+        "name": "Krea 2 Turbo",
+        "type": "image",
+        "image_role": "t2i",
+        "license_spdx_or_name": "Krea 2 Community License",
+        "license_authorization_status": "required_missing",  # Admin must acknowledge
+        "fits_target_vram": False,  # Set true after Phase 0
+        "is_active": False,  # Active after download + license ack
+    },
+    {
+        "machine_key": "krea_2_raw",
+        "name": "Krea 2 Raw",
+        "type": "image",
+        "image_role": "training_base",
+        "license_spdx_or_name": "Krea 2 Community License",
+        "license_authorization_status": "required_missing",
+        "is_active": False,
+    },
+    {
+        "machine_key": "z_image_turbo",
+        "name": "Z-Image-Turbo",
+        "type": "image",
+        "image_role": "t2i",
+        "license_spdx_or_name": "Apache-2.0",
+        "license_authorization_status": "not_required",
+        "fits_target_vram": True,  # Official: 16 GB
+        "is_active": False,
+    },
+    {
+        "machine_key": "flux_3_image_klein",
+        "name": "FLUX 3 Image Klein",
+        "type": "image",
+        "image_role": "both",
+        "license_spdx_or_name": "FLUX Kommunity License v.1.0",
+        "license_authorization_status": "required_missing",
+        "fits_target_vram": False,  # Set true after Phase 0 (upsampler offload TBD)
+        "is_active": False,
+    },
+    {
+        "machine_key": "minimax_h3_image",
+        "name": "MiniMax-H3-Image",
+        "type": "image",
+        "image_role": "both",
+        "license_spdx_or_name": "MiniMax-H3-Image Community License",
+        "license_authorization_status": "required_missing",  # US excluded territory
+        "fits_target_vram": False,  # TBD: quantization required for 32 GB
+        "is_active": False,
+    },
+]
+
+async def seed_image_models(db: AsyncSession):
+    for model_data in IMAGE_MODEL_PACK:
+        result = await db.execute(select(ModelRegistry).where(ModelRegistry.machine_key == model_data["machine_key"]))
+        if result.scalar_one_or_none() is None:
+            model = ModelRegistry(**model_data)
+            db.add(model)
+    await db.commit()
+```
+
+**Update `WorkflowProfile` seed:**
+```python
+# h3_default profile:
+"default_image_model_key": "minimax_h3_image",  # Only after IMG-GATE-01 & IMG-GATE-02
+"default_image_edit_model_key": "minimax_h3_image",
+
+# ltx_2_5_default and wan profiles:
+"default_image_model_key": "krea_2_turbo",  # Falls back to z_image_turbo (IMG-03)
+"default_image_edit_model_key": "flux_3_image_klein",
+```
+
+---
+
+### Phase 1 Addition: Keyframe Model Defaulting Logic
+
+**Service:** `backend/services/storyboard_service.py`
+
+```python
+async def resolve_image_model_default(db: AsyncSession, project: Project, is_edit: bool = False) -> ModelRegistry:
+    """Resolve default image model for keyframe, applying IMG-06/IMG-07 gates."""
+    profile = await db.get(WorkflowProfile, project.workflow_profile_id)
+    key = profile.default_image_edit_model_key if is_edit else profile.default_image_model_key
+    
+    # Try profile default
+    if key:
+        result = await db.execute(
+            select(ModelRegistry)
+            .where(ModelRegistry.machine_key == key)
+            .where(ModelRegistry.is_active == True)
+            .where(ModelRegistry.type == "image")
+        )
+        model = result.scalar_one_or_none()
+        # Check gates (IMG-GATE-01, IMG-GATE-02)
+        if model and model.license_authorization_status != "required_missing" and model.fits_target_vram:
+            return model
+    
+    # Fallback: z_image_turbo (IMG-03)
+    result = await db.execute(
+        select(ModelRegistry)
+        .where(ModelRegistry.machine_key == "z_image_turbo")
+        .where(ModelRegistry.is_active == True)
+    )
+    fallback = result.scalar_one_or_none()
+    if fallback:
+        return fallback
+    
+    # No default available
+    raise HTTPException(status_code=409, detail="image_default_unavailable")
+
+async def create_keyframe(db: AsyncSession, storyboard_id: str, data: dict) -> Keyframe:
+    """Create keyframe with defaulted model_id if omitted (IMG-06)."""
+    storyboard = await get_storyboard(db, storyboard_id)
+    project = await db.get(Project, storyboard.project_id)
+    
+    if "model_id" not in data or data["model_id"] is None:
+        default_model = await resolve_image_model_default(db, project, is_edit=False)
+        data["model_id"] = default_model.id
+    
+    keyframe = Keyframe(**data, storyboard_id=storyboard_id)
+    db.add(keyframe)
+    await db.commit()
+    await db.refresh(keyframe)
+    return keyframe
+```
+
+**Endpoint:** `POST /api/keyframes` (unchanged signature; `model_id` optional in request body)
+
+---
+
+### Phase 2 Addition: Import Model for Image Checkpoints
+
+**Update:** `backend/services/import_service.py`
+
+Extend Import Model to accept `type='image'` models:
+- Detect image vs video layout from safetensors header
+- Apply same convert/quantize/safety-gate flow
+- Sample render: short still (1024×1024 or 16:9), not video
+- Register with `type='image'`, `image_role`, `machine_key` if shipped family
+
+**Endpoint:** `POST /api/models/import?type=image`
+
+---
+
+### Phase 3 Addition: Edit-from-Previous Keyframe
+
+**Service:** `backend/services/storyboard_service.py`
+
+```python
+async def edit_from_previous_keyframe(
+    db: AsyncSession,
+    source_keyframe_ids: list[str],
+    prompt: str,
+    model_id: str | None = None
+) -> Job:
+    """Create edit job using previous keyframe(s) as references (IMG-07)."""
+    source_keyframes = [await db.get(Keyframe, kid) for kid in source_keyframe_ids]
+    project_id = source_keyframes[0].storyboard.project_id
+    project = await db.get(Project, project_id)
+    
+    # Default to edit model
+    if model_id is None:
+        model = await resolve_image_model_default(db, project, is_edit=True)
+        model_id = model.id
+    
+    # Create job with source images as references
+    job = Job(
+        type="keyframe_edit",
+        project_id=project_id,
+        model_id=model_id,
+        params={
+            "prompt": prompt,
+            "reference_keyframe_ids": source_keyframe_ids,
+        },
+        target_queue="gpu_image",  # New queue for image jobs
+    )
+    db.add(job)
+    await db.commit()
+    return job
+```
+
+**Endpoint:** `POST /api/keyframes/edit-from-previous`
+
+---
+
+**v1.3 Summary:**
+- Shipped image models: Krea 2 Turbo (T2I default), Z-Image-Turbo (fallback), FLUX 3 Image Klein (edit default)
+- H3-profile default: MiniMax-H3-Image (gated by license + VRAM fit)
+- Phase 0: VRAM fit checks for all image models
+- Phase 1: Registry seed, profile default fields, keyframe defaulting logic
+- Phase 2: Import Model for image checkpoints
+- Phase 3: Edit-from-previous workflow with multi-reference
+
