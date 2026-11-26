@@ -79,6 +79,41 @@ File-by-file integration blueprint mapping the phased plan onto the AIMoveMaker 
 
 ---
 
+## Implementation Guides (Agent-Ready)
+
+### **BUILD_GUIDE.md**
+**Title:** Movie Maker Build Guide  
+**Version:** 1.0  
+**Date:** 26 November 2026  
+**Target:** Coding agents building Movie Maker features on AIMoveMaker v1 codebase
+
+Agent-ready technical implementation guide grounded in the actual AIMoveMaker code at `/workspace`. Provides complete repository map, naming conventions, existing patterns to copy, and hard rules (multi-user RBAC, immutable project core model, runtime-agnostic Diffusers/SGLang only, no Docker, never commit secrets). Breaks each phase (P0–P5) into small work packages with exact files to modify, function signatures, data model changes, Alembic migrations, API endpoints, Celery queue assignments, test expectations, acceptance criteria, and definition of done.
+
+**Contents:**
+- Repository map & directory structure
+- Code patterns with examples: Models (SQLAlchemy), Schemas (Pydantic), Services (async), Routers (FastAPI), Celery tasks, Migrations (Alembic), Frontend (React/Zustand/TypeScript)
+- Hard rules (6 non-negotiable requirements)
+- Phase-by-phase work packages: P0 (H3 spike), P1 (project lock + library), P2 (Import Model), P3 (H3 workers + Seed Hunter), P4 (Prompt IDE + ASR), P5 (NLE seam + native Redis)
+- Testing strategy, common pitfalls, development workflow
+
+### **UI_UX_SPEC.md**
+**Title:** Movie Maker UI/UX Specification  
+**Version:** 1.0  
+**Date:** 26 November 2026  
+**Target:** Coding agents building Movie Maker UI on AIMoveMaker v1 React/Vite frontend
+
+Complete UI/UX design specification grounded in the actual React/Vite frontend code at `/workspace/frontend/src`. Covers information architecture (navigation by role), design system (blue-green theme, Shadcn/ui components), and detailed screen-by-screen specifications with layouts, states (empty/loading/error/progress), role permissions, and WebSocket real-time features. Includes ASCII wireframes and Mermaid flow diagrams.
+
+**Contents:**
+- Information architecture & route structure
+- Design system: color palette (#081A24, #36A9E8, #2DD4BF), component library (Shadcn/ui), reusable patterns (list views, empty/loading/error states)
+- Screen specifications: ProjectsView (core model picker), ModelsView (Import Model 5-step wizard), StoryboardView (6-field H3 Prompt IDE, RefMods, 3-seed Stage-1 previews, Stage-2 upscale), TimelineView (17n+5 continuation, drift counter, seam color grading, voice cloner, render queue), AdminView, SettingsView
+- WebSocket progress patterns: job progress, import progress, project presence
+- Responsive behavior & accessibility (keyboard nav, ARIA labels, WCAG AA contrast)
+- ASCII wireframes & Mermaid flow diagrams
+
+---
+
 ## Historical Versions
 
 ### **history/AIMoveMaker_PRD_Addendum_MovieMaker_v1.1.md**
