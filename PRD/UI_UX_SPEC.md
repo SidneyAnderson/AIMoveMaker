@@ -1043,12 +1043,12 @@ For complete integration plan, see `/workspace/PRD/MovieMaker_Integration_Map.md
 
 **Default Resolution (IMG-03, IMG-04, IMG-05):**
 1. **For LTX/Wan projects:**
-   - T2I default: Krea 2 Turbo → falls back to Z-Image-Turbo if Krea 2 not enabled
-   - Edit default: FLUX 3 Image Klein
+   - T2I default: [Krea 2 Turbo](https://huggingface.co/krea/Krea-2-Turbo) → falls back to [Z-Image-Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) if Krea 2 not enabled
+   - Edit default: [FLUX 3 Image Klein](https://huggingface.co/black-forest-labs/flux-3-image-klein)
 
 2. **For H3 projects:**
-   - If IMG-GATE-01 & IMG-GATE-02 both pass: MiniMax-H3-Image for T2I & edit
-   - Otherwise: same as LTX/Wan (Krea 2 Turbo / FLUX 3 Klein)
+   - If IMG-GATE-01 & IMG-GATE-02 both pass: [MiniMax-H3-Image](https://huggingface.co/MiniMaxAI/MiniMax-H3-Image) for T2I & edit
+   - Otherwise: same as LTX/Wan ([Krea 2 Turbo](https://huggingface.co/krea/Krea-2-Turbo) / [FLUX 3 Klein](https://huggingface.co/black-forest-labs/flux-3-image-klein))
 
 3. **UI must show which default is live:**
    ```
@@ -1063,7 +1063,7 @@ For complete integration plan, see `/workspace/PRD/MovieMaker_Integration_Map.md
 
 ### License Acknowledgement Flow
 
-**Before enabling gated model (Krea 2, FLUX 3 Klein, MiniMax-H3-Image):**
+**Before enabling gated model ([Krea 2](https://huggingface.co/krea/Krea-2-Turbo), [FLUX 3 Klein](https://huggingface.co/black-forest-labs/flux-3-image-klein), [MiniMax-H3-Image](https://huggingface.co/MiniMaxAI/MiniMax-H3-Image)):**
 
 ```
 ┌────────────────────────────────────────┐
@@ -1295,7 +1295,7 @@ graph TD
 
 **v1.3 UI/UX Summary:**
 - Keyframe model picker shows live defaults with badges (⚡ T2I, ✏️ Edit, 🔒 License, ⚠ VRAM)
-- License acknowledgement modals for gated models (Krea 2, FLUX 3 Klein, MiniMax-H3-Image)
+- License acknowledgement modals for gated models ([Krea 2](https://huggingface.co/krea/Krea-2-Turbo), [FLUX 3 Klein](https://huggingface.co/black-forest-labs/flux-3-image-klein), [MiniMax-H3-Image](https://huggingface.co/MiniMaxAI/MiniMax-H3-Image))
 - Edit-from-previous flow with multi-reference (1-10 images) and strength slider
 - Model library "Image Models" tab with gate status indicators
 - Default resolution flow per profile (H3 vs LTX/Wan)

@@ -69,6 +69,24 @@ python env_check.py --model-root ~/AIModels
 
 ---
 
+## Model Links
+
+Quick reference to all Hugging Face model pages:
+
+| Model | Hugging Face Link | Gated? | License |
+|-------|-------------------|--------|---------|
+| **MiniMax H3** | [MiniMaxAI/MiniMax-H3](https://huggingface.co/MiniMaxAI/MiniMax-H3) | No | MiniMax Community License |
+| **LTX-2.5** | [Lightricks/LTX-2.5](https://huggingface.co/Lightricks/LTX-2.5) | Yes | other (requires acceptance) |
+| **Wan 2.2 I2V** | [Wan-AI/Wan2.2-I2V-A14B](https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B) | No | Apache-2.0 |
+| **Wan Animate 2** | [Wan-AI/Wan2.2-Animate-14B](https://huggingface.co/Wan-AI/Wan2.2-Animate-14B) | No | Apache-2.0 |
+| **Krea 2 Turbo** | [krea/Krea-2-Turbo](https://huggingface.co/krea/Krea-2-Turbo) | Yes | Krea 2 Community License |
+| **Krea 2 Raw** | [krea/Krea-2-Raw](https://huggingface.co/krea/Krea-2-Raw) | Yes | Krea 2 Community License |
+| **Z-Image-Turbo** | [Tongyi-MAI/Z-Image-Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) | No | Apache-2.0 |
+| **FLUX 3 Image Klein** | [black-forest-labs/flux-3-image-klein](https://huggingface.co/black-forest-labs/flux-3-image-klein) | Yes | FLUX Kommunity License |
+| **MiniMax-H3-Image** | [MiniMaxAI/MiniMax-H3-Image](https://huggingface.co/MiniMaxAI/MiniMax-H3-Image) | No | MiniMax-H3-Image Community License |
+
+---
+
 ## What Gets Tested
 
 ### Video Models (3 families)
@@ -80,12 +98,12 @@ python env_check.py --model-root ~/AIModels
    - Precision: FP8 (torchao) or NVFP4 (ModelOpt) if `sm_120` supports; else BF16
 
 2. **LTX-2.5** (`ltx_2_5`)
-   - Hugging Face: `Lightricks/LTX-2.5` (gated: requires license acceptance)
+   - Hugging Face: [`Lightricks/LTX-2.5`](https://huggingface.co/Lightricks/LTX-2.5) (gated: requires license acceptance)
    - Test: Load via `LTX2Pipeline` or `LTX25AutoBlocks`, render 24-frame 768×512 clip
    - Precision: FP8 or BF16
 
 3. **Wan 2.2 + Wan Animate 2** (`wan_bernini`)
-   - Hugging Face: `Wan-AI/Wan2.2-I2V-A14B` (image-to-video, 14B) + `Wan-AI/Wan2.2-Animate-14B` (video-to-video, Wan Animate 2)
+   - Hugging Face: [`Wan-AI/Wan2.2-I2V-A14B`](https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B) (image-to-video, 14B) + [`Wan-AI/Wan2.2-Animate-14B`](https://huggingface.co/Wan-AI/Wan2.2-Animate-14B) (video-to-video, Wan Animate 2)
    - Test: Load, render 16-frame 512×512 clip
    - Precision: BF16 or FP8
    - License: Apache-2.0 (not gated)
@@ -93,21 +111,21 @@ python env_check.py --model-root ~/AIModels
 ### Image Models (4 shipped defaults)
 
 4. **Krea 2 Turbo** (`krea_2_turbo`)
-   - Hugging Face: `krea/Krea-2-Turbo` (gated: requires license acceptance)
+   - Hugging Face: [`krea/Krea-2-Turbo`](https://huggingface.co/krea/Krea-2-Turbo) (gated: requires license acceptance)
    - Test: Load via `Krea2Pipeline`, render 1024×1024 still (8 steps, CFG off)
-   - Also: `krea/Krea-2-Raw` (gated: for LoRA training)
+   - Also: [`krea/Krea-2-Raw`](https://huggingface.co/krea/Krea-2-Raw) (gated: for LoRA training)
 
 5. **Z-Image-Turbo** (`z_image_turbo`)
-   - Hugging Face: `Tongyi-MAI/Z-Image-Turbo` (not gated, Apache-2.0)
+   - Hugging Face: [`Tongyi-MAI/Z-Image-Turbo`](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) (not gated, Apache-2.0)
    - Test: Load via `ZImagePipeline`, render 1024×1024 still (9 steps)
 
 6. **FLUX 3 Image Klein** (`flux_3_image_klein`)
-   - Hugging Face: `black-forest-labs/flux-3-image-klein` (gated: requires license acceptance)
+   - Hugging Face: [`black-forest-labs/flux-3-image-klein`](https://huggingface.co/black-forest-labs/flux-3-image-klein) (gated: requires license acceptance)
    - Test: Load via `Flux3DistilledModularPipeline`, render 1024×1024 still (16 steps)
    - **Also test:** With 9B prompt upsampler offloaded (measure separately)
 
 7. **MiniMax-H3-Image** (`minimax_h3_image`)
-   - Hugging Face: `MiniMaxAI/MiniMax-H3-Image` (not gated, MiniMax-H3-Image Community License)
+   - Hugging Face: [`MiniMaxAI/MiniMax-H3-Image`](https://huggingface.co/MiniMaxAI/MiniMax-H3-Image) (not gated, MiniMax-H3-Image Community License)
    - Test: Load via `MiniMaxH3ImageModularPipeline`, render 16:9 still (try 1920×1080 first)
    - **Gate:** Official BF16 + full text encoder won't fit; test community quantization if available
 
@@ -122,9 +140,9 @@ huggingface-cli login  # Paste your HF token (required for gated models)
 ```
 
 **Accept licenses for gated models** (visit these URLs and click "Accept"):
-- `krea/Krea-2-Turbo` and `krea/Krea-2-Raw`: https://huggingface.co/krea/Krea-2-Turbo
-- `black-forest-labs/flux-3-image-klein`: https://huggingface.co/black-forest-labs/flux-3-image-klein
-- `Lightricks/LTX-2.5`: https://huggingface.co/Lightricks/LTX-2.5
+- [krea/Krea-2-Turbo](https://huggingface.co/krea/Krea-2-Turbo) and [krea/Krea-2-Raw](https://huggingface.co/krea/Krea-2-Raw)
+- [black-forest-labs/flux-3-image-klein](https://huggingface.co/black-forest-labs/flux-3-image-klein)
+- [Lightricks/LTX-2.5](https://huggingface.co/Lightricks/LTX-2.5)
 
 ### Windows (PowerShell) Downloads
 

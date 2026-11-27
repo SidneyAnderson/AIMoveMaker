@@ -531,10 +531,10 @@ For UI/UX specifications, see `/workspace/PRD/UI_UX_SPEC.md`.
 **Goal:** Test keyframe image models on RTX 5090 32 GB to record `fits_target_vram` flags for IMG-GATE-02.
 
 **Models to test:**
-- Krea 2 Turbo (`krea/Krea-2-Turbo`) - 12B, shipped T2I default
-- Z-Image-Turbo (`Tongyi-MAI/Z-Image-Turbo`) - 6B, shipped fallback
-- FLUX 3 Image Klein (`black-forest-labs/flux-3-image-klein`) - 5.6B + 9B upsampler, shipped edit default
-- MiniMax-H3-Image (`MiniMaxAI/MiniMax-H3-Image`) - 68.65 GB BF16, H3-profile default after gates
+- [Krea 2 Turbo](https://huggingface.co/krea/Krea-2-Turbo) - 12B, shipped T2I default
+- [Z-Image-Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) - 6B, shipped fallback
+- [FLUX 3 Image Klein](https://huggingface.co/black-forest-labs/flux-3-image-klein) - 5.6B + 9B upsampler, shipped edit default
+- [MiniMax-H3-Image](https://huggingface.co/MiniMaxAI/MiniMax-H3-Image) - 68.65 GB BF16, H3-profile default after gates
 
 **Test script:** `scripts/spikes/image_model_vram_test.py`
 
@@ -590,6 +590,7 @@ IMAGE_MODEL_PACK = [
         "name": "Krea 2 Turbo",
         "type": "image",
         "image_role": "t2i",
+        "hf_repo": "krea/Krea-2-Turbo",  # https://huggingface.co/krea/Krea-2-Turbo
         "license_spdx_or_name": "Krea 2 Community License",
         "license_authorization_status": "required_missing",  # Admin must acknowledge
         "fits_target_vram": False,  # Set true after Phase 0
@@ -600,6 +601,7 @@ IMAGE_MODEL_PACK = [
         "name": "Krea 2 Raw",
         "type": "image",
         "image_role": "training_base",
+        "hf_repo": "krea/Krea-2-Raw",  # https://huggingface.co/krea/Krea-2-Raw
         "license_spdx_or_name": "Krea 2 Community License",
         "license_authorization_status": "required_missing",
         "is_active": False,
@@ -609,6 +611,7 @@ IMAGE_MODEL_PACK = [
         "name": "Z-Image-Turbo",
         "type": "image",
         "image_role": "t2i",
+        "hf_repo": "Tongyi-MAI/Z-Image-Turbo",  # https://huggingface.co/Tongyi-MAI/Z-Image-Turbo
         "license_spdx_or_name": "Apache-2.0",
         "license_authorization_status": "not_required",
         "fits_target_vram": True,  # Official: 16 GB
@@ -619,6 +622,7 @@ IMAGE_MODEL_PACK = [
         "name": "FLUX 3 Image Klein",
         "type": "image",
         "image_role": "both",
+        "hf_repo": "black-forest-labs/flux-3-image-klein",  # https://huggingface.co/black-forest-labs/flux-3-image-klein
         "license_spdx_or_name": "FLUX Kommunity License v.1.0",
         "license_authorization_status": "required_missing",
         "fits_target_vram": False,  # Set true after Phase 0 (upsampler offload TBD)
@@ -629,6 +633,7 @@ IMAGE_MODEL_PACK = [
         "name": "MiniMax-H3-Image",
         "type": "image",
         "image_role": "both",
+        "hf_repo": "MiniMaxAI/MiniMax-H3-Image",  # https://huggingface.co/MiniMaxAI/MiniMax-H3-Image
         "license_spdx_or_name": "MiniMax-H3-Image Community License",
         "license_authorization_status": "required_missing",  # US excluded territory
         "fits_target_vram": False,  # TBD: quantization required for 32 GB
@@ -770,7 +775,7 @@ async def edit_from_previous_keyframe(
 ---
 
 **v1.3 Summary:**
-- Shipped image models: Krea 2 Turbo (T2I default), Z-Image-Turbo (fallback), FLUX 3 Image Klein (edit default)
+- Shipped image models: [Krea 2 Turbo](https://huggingface.co/krea/Krea-2-Turbo) (T2I default), [Z-Image-Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) (fallback), [FLUX 3 Image Klein](https://huggingface.co/black-forest-labs/flux-3-image-klein) (edit default)
 - H3-profile default: MiniMax-H3-Image (gated by license + VRAM fit)
 - Phase 0: VRAM fit checks for all image models
 - Phase 1: Registry seed, profile default fields, keyframe defaulting logic

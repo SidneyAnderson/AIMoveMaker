@@ -31,8 +31,8 @@ Word format version of the baseline PRD v1.0.
 The build-contract addendum extending AI Movie Maker v1 with the Movie Maker layers: MiniMax H3 runtime-agnostic engine, Import Model converter pipeline with safety gates, project-level core model lock, multi-user model library, Seed Hunter v3 workflow (6-field structured prompts, RefMods, 3-seed Stage-1 previews, 3D latent upscale Stage-2, dialogue cloner, 17n+5 seamless continuation), keyframe image model defaults (Krea 2 Turbo, FLUX 3 Image Klein, MiniMax-H3-Image with gates), LTX-2.5 & Wan Animate 2 support, NLE seam finishing tools, and native Redis installers (Ubuntu/Windows without Docker).
 
 **Key Features:**
-- Immutable per-project core video model (`minimax_h3`, `ltx_2_5`, or `wan_bernini`)
-- Keyframe image model defaults (v1.3): Krea 2 Turbo T2I default with Z-Image-Turbo fallback; FLUX 3 Image Klein edit/consistency default; MiniMax-H3-Image H3-profile default gated by license + VRAM fit
+- Immutable per-project core video model ([`minimax_h3`](https://huggingface.co/MiniMaxAI/MiniMax-H3), [`ltx_2_5`](https://huggingface.co/Lightricks/LTX-2.5), or [`wan_bernini`](https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B))
+- Keyframe image model defaults (v1.3): [Krea 2 Turbo](https://huggingface.co/krea/Krea-2-Turbo) T2I default with [Z-Image-Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) fallback; [FLUX 3 Image Klein](https://huggingface.co/black-forest-labs/flux-3-image-klein) edit/consistency default; [MiniMax-H3-Image](https://huggingface.co/MiniMaxAI/MiniMax-H3-Image) H3-profile default gated by license + VRAM fit
 - Import Model: Civitai/local intake → header detection → ComfyUI-to-Diffusers conversion → FP8/NVFP4 quantization → test render safety gate → RBAC-guarded cleanup (applies to video and image models)
 - Multi-user model/LoRA library with `global`/`user` visibility, `owner_id`, and shared-folder reference checks
 - H3 Seed Hunter v3 integration: structured `Singularity` prompts, RefMods, multi-seed previews, voice cloner, continuation with quality resets

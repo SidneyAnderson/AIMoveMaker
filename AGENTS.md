@@ -59,13 +59,13 @@ Before writing any code, read these documents in this exact order:
    - DO NOT add a `solo_creator` bypass
 
 3. **One Core Video Model Per Project (Immutable)**
-   - Each project locks ONE core video model at creation: `minimax_h3`, `ltx_2_5`, or `wan_bernini`
+   - Each project locks ONE core video model at creation: [`minimax_h3`](https://huggingface.co/MiniMaxAI/MiniMax-H3), [`ltx_2_5`](https://huggingface.co/Lightricks/LTX-2.5), or [`wan_bernini`](https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B)
    - This choice is immutable in place
    - Migration requires cloning into a new project
    - DO NOT allow switching a project's core model (PROFILE-03)
 
 4. **Runtime-Agnostic: Diffusers/SGLang Only**
-   - Use Diffusers >= 0.40 or SGLang >= 0.5.17
+   - Use `"diffusers>=0.40"` or `"sglang>=0.5.17"`
    - DO NOT add ComfyUI runtime or ComfyUI nodes
    - ComfyUI-packed checkpoints are converted once at import, then run via Diffusers
    - See addendum A0.2 item 3
@@ -374,17 +374,28 @@ Seed the first-party model pack on startup or migration:
 ```python
 # backend/seed.py
 VIDEO_MODELS = [
-    {"machine_key": "minimax_h3", "name": "MiniMax H3", "type": "video", ...},
-    {"machine_key": "ltx_2_5", "name": "LTX-2.5", "type": "video", ...},
-    {"machine_key": "wan_bernini", "name": "Wan 2.2", "type": "video", ...},
+    {"machine_key": "minimax_h3", "name": "MiniMax H3", "type": "video", "hf_repo": "MiniMaxAI/MiniMax-H3", ...},
+    {"machine_key": "ltx_2_5", "name": "LTX-2.5", "type": "video", "hf_repo": "Lightricks/LTX-2.5", ...},
+    {"machine_key": "wan_bernini", "name": "Wan 2.2", "type": "video", "hf_repo": "Wan-AI/Wan2.2-I2V-A14B", ...},
 ]
 
 IMAGE_MODELS = [
-    {"machine_key": "krea_2_turbo", "name": "Krea 2 Turbo", "type": "image", ...},
-    {"machine_key": "z_image_turbo", "name": "Z-Image-Turbo", "type": "image", ...},
-    {"machine_key": "flux_3_image_klein", "name": "FLUX 3 Image Klein", "type": "image", ...},
-    {"machine_key": "minimax_h3_image", "name": "MiniMax-H3-Image", "type": "image", ...},
+    {"machine_key": "krea_2_turbo", "name": "Krea 2 Turbo", "type": "image", "hf_repo": "krea/Krea-2-Turbo", ...},
+    {"machine_key": "z_image_turbo", "name": "Z-Image-Turbo", "type": "image", "hf_repo": "Tongyi-MAI/Z-Image-Turbo", ...},
+    {"machine_key": "flux_3_image_klein", "name": "FLUX 3 Image Klein", "type": "image", "hf_repo": "black-forest-labs/flux-3-image-klein", ...},
+    {"machine_key": "minimax_h3_image", "name": "MiniMax-H3-Image", "type": "image", "hf_repo": "MiniMaxAI/MiniMax-H3-Image", ...},
 ]
+
+# Full model links:
+# - MiniMax H3: https://huggingface.co/MiniMaxAI/MiniMax-H3
+# - LTX-2.5: https://huggingface.co/Lightricks/LTX-2.5 (gated)
+# - Wan 2.2 I2V: https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B
+# - Wan Animate 2: https://huggingface.co/Wan-AI/Wan2.2-Animate-14B
+# - Krea 2 Turbo: https://huggingface.co/krea/Krea-2-Turbo (gated)
+# - Krea 2 Raw: https://huggingface.co/krea/Krea-2-Raw (gated, for LoRA training)
+# - Z-Image-Turbo: https://huggingface.co/Tongyi-MAI/Z-Image-Turbo
+# - FLUX 3 Image Klein: https://huggingface.co/black-forest-labs/flux-3-image-klein (gated)
+# - MiniMax-H3-Image: https://huggingface.co/MiniMaxAI/MiniMax-H3-Image
 ```
 
 **After Phase 0:** Read `phase0/results/*.json` and update `fits_target_vram` flags.
