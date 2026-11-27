@@ -7,9 +7,10 @@ import sys
 import json
 import argparse
 import platform
+import re
 from pathlib import Path
 from datetime import datetime, timezone
-from typing import Dict, Any
+from typing import Dict, Any, Optional
 
 import torch
 
@@ -20,6 +21,107 @@ SAMPLES_DIR = RESULTS_DIR / "samples"
 VRAM_LIMIT_GB = 32.0
 SAFETY_MARGIN = 0.9
 VRAM_THRESHOLD_GB = VRAM_LIMIT_GB * SAFETY_MARGIN
+
+_SECRET_RE = re.compile(
+    r"hf_[A-Za-z0-9]{8,}|api_token=[^&\s]+|Bearer\s+\S+|token=hf_\S+",
+    re.IGNORECASE,
+)
+_REPO_RE = re.compile(r"([A-Za-z0-9][A-Za-z0-9_.-]*/[A-Za-z0-9][A-Za-z0-9_.-]*)")
+
+
+def redact(text: str) -> str:
+    """Remove Hugging Face tokens from text that may be stored or printed."""
+    return _SECRET_RE.sub("[redacted]", text)
+
+
+def _walk_exceptions(exc: BaseException):
+    seen = set()
+    stack = [exc]
+    while stack:
+        current = stack.pop()
+        if current is None or id(current) in seen:
+            continue
+        seen.add(id(current))
+        yield current
+        stack.append(getattr(current, "__cause__", None))
+        stack.append(getattr(current, "__context__", None))
+
+
+def _status_code(exc: BaseException) -> Optional[int]:
+    response = getattr(exc, "response", None)
+    if response is not None:
+        code = getattr(response, "status_code", None)
+        if code is None:
+            code = getattr(response, "status", None)
+        if isinstance(code, int):
+            return code
+    code = getattr(exc, "status_code", None)
+    return code if isinstance(code, int) else None
+
+
+def exception_is_gated(exc: BaseException) -> bool:
+    """True for huggingface_hub GatedRepoError or an HTTP 401/403 in the chain."""
+    for current in _walk_exceptions(exc):
+        if type(current).__name__ == "GatedRepoError":
+            return True
+        if _status_code(current) in (401, 403):
+            return True
+        text = str(current).lower()
+        if "gatedrepoerror" in text:
+            return True
+        if "access to model" in text and "restricted" in text:
+            return True
+    return False
+
+
+def repo_id_from_exception(exc: BaseException) -> Optional[str]:
+    for current in _walk_exceptions(exc):
+        explicit = getattr(current, "repo_id", None)
+        if isinstance(explicit, str) and "/" in explicit:
+            return explicit
+        match = _REPO_RE.search(redact(str(current)))
+        if match:
+            return match.group(1)
+    return None
+
+
+def gated_no_access_result(
+    model_key: str,
+    repo_id: Optional[str],
+    exc: Optional[BaseException] = None,
+) -> Dict[str, Any]:
+    """Result for a license gate. Omits vram_fit so it cannot be stored as a measurement."""
+    shown = repo_id or "the gated Hugging Face repo"
+    kind = type(exc).__name__ if exc is not None else "HTTP 401/403"
+    page = f"https://huggingface.co/{repo_id}" if repo_id else "https://huggingface.co"
+    return {
+        "model_key": model_key,
+        "status": "gated_no_access",
+        "repo_id": repo_id or "",
+        "errors": [
+            f"{kind} for {shown}. The owner must accept the license on {page} "
+            "with their own Hugging Face account. This is not a model failure "
+            "and is not a VRAM measurement."
+        ],
+        "notes": (
+            "Pending Phase 0. Do not set fits_target_vram from this file. "
+            "Do not use an alternate mirror, a re-upload, or a shared token. "
+            "Hint: run `hf auth login` or `huggingface-cli login`, accept the "
+            f"license at {page}, then retry the same test."
+        ),
+    }
+
+
+def as_gated_or_none(
+    model_key: str,
+    exc: BaseException,
+    default_repo: Optional[str] = None,
+) -> Optional[Dict[str, Any]]:
+    if not exception_is_gated(exc):
+        return None
+    repo_id = repo_id_from_exception(exc) or default_repo
+    print(f"⚠️  gated_no_access: {repo_id or model_key} (license not accepted; not a VRAM result)")
+    return gated_no_access_result(model_key, repo_id, exc)
 
 
 def get_hardware_info() -> Dict[str, Any]:
@@ -137,14 +239,15 @@ def test_video_model_h3(model_root: Path, precision: str = "fp8") -> Dict[str, A
         return result
         
     except Exception as e:
-        print(f"❌ FAILED: {e}")
-        import traceback
-        traceback.print_exc()
+        gated = as_gated_or_none(model_key, e, "MiniMaxAI/MiniMax-H3")
+        if gated:
+            return gated
+        print(f"❌ FAILED: {redact(str(e))}")
         return {
             "model_key": model_key,
             "status": "error",
             "vram_fit": False,
-            "errors": [str(e)],
+            "errors": [redact(f"{type(e).__name__}: {e}")],
         }
 
 
@@ -243,14 +346,15 @@ def test_image_model_krea2(model_root: Path) -> Dict[str, Any]:
         return result
         
     except Exception as e:
-        print(f"❌ FAILED: {e}")
-        import traceback
-        traceback.print_exc()
+        gated = as_gated_or_none(model_key, e, "krea/Krea-2-Turbo")
+        if gated:
+            return gated
+        print(f"❌ FAILED: {redact(str(e))}")
         return {
             "model_key": model_key,
             "status": "error",
             "vram_fit": False,
-            "errors": [str(e)],
+            "errors": [redact(f"{type(e).__name__}: {e}")],
         }
 
 
@@ -437,13 +541,17 @@ def test_h3_ref2va(model_root: Path, precision: str = "bf16") -> Dict[str, Any]:
             "notes": notes + " Load-only; a ref2va render was not run.",
         }
     except Exception as exc:
-        print(f"⚠️  Ref2VA load failed: {exc}")
+        gated = as_gated_or_none(model_key, exc, "MiniMaxAI/MiniMax-H3")
+        if gated:
+            gated["notes"] = notes + " " + gated["notes"]
+            return gated
+        print(f"⚠️  Ref2VA load failed: {redact(str(exc))}")
         return {
             "model_key": model_key,
             "status": "pipeline_unavailable",
             "vram_fit": False,
             "precision": precision,
-            "errors": [f"{type(exc).__name__}: {exc}"],
+            "errors": [redact(f"{type(exc).__name__}: {exc}")],
             "notes": notes,
         }
 
@@ -484,15 +592,21 @@ def test_ltx_ic_lora(model_root: Path, precision: str = "bf16") -> Dict[str, Any
     try:
         from diffusers import LTX2Pipeline
     except Exception as exc:
-        print(f"⚠️  LTX2Pipeline unavailable: {exc}")
+        gated = as_gated_or_none(model_key, exc, "Lightricks/LTX-2.5")
+        if gated:
+            gated["notes"] = notes + " " + gated["notes"]
+            return gated
+        print(f"⚠️  LTX2Pipeline unavailable: {redact(str(exc))}")
         return {
             "model_key": model_key,
             "status": "pipeline_unavailable",
             "vram_fit": False,
             "precision": precision,
             "errors": [
-                f"LTX2Pipeline import failed: {exc}. "
-                "Diffusers did not expose the LTX-2.5 pipeline in this environment."
+                redact(
+                    f"LTX2Pipeline import failed: {type(exc).__name__}: {exc}. "
+                    "Diffusers did not expose the LTX-2.5 pipeline in this environment."
+                )
             ],
             "notes": notes,
         }
@@ -524,13 +638,26 @@ def test_ltx_ic_lora(model_root: Path, precision: str = "bf16") -> Dict[str, Any
             "notes": notes + " Load-only; no render was run.",
         }
     except Exception as exc:
-        print(f"⚠️  IC-LoRA Diffusers load failed: {exc}")
+        gated = as_gated_or_none(
+            model_key,
+            exc,
+            "Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients",
+        )
+        if gated:
+            gated["notes"] = (
+                notes
+                + " Also accept Lightricks/LTX-2.5 and "
+                "Lightricks/LTX-2.5-22b-IC-LoRA-Restore. "
+                + gated["notes"]
+            )
+            return gated
+        print(f"⚠️  IC-LoRA Diffusers load failed: {redact(str(exc))}")
         return {
             "model_key": model_key,
             "status": "pipeline_unavailable",
             "vram_fit": False,
             "precision": precision,
-            "errors": [f"{type(exc).__name__}: {exc}"],
+            "errors": [redact(f"{type(exc).__name__}: {exc}")],
             "notes": notes + " Use the Section A19 fallback. Do not route through ComfyUI.",
         }
 
@@ -621,6 +748,12 @@ def main():
     print("Summary")
     print("=" * 60)
     for r in results:
+        if r["status"] == "gated_no_access":
+            print(
+                f"⏳ {r['model_key']}: gated_no_access "
+                f"(repo {r.get('repo_id') or 'unknown'}; not a VRAM result)"
+            )
+            continue
         status_icon = "✅" if r["status"] == "pass" else "❌"
         vram_fit = r.get("vram_fit", False)
         peak_vram = r.get("peak_vram_gb", "N/A")

@@ -272,6 +272,7 @@ The coding agent will read these results and populate:
 - `ModelRegistry.peak_vram_gb`
 - `ModelRegistry.load_time_sec`
 - `ModelRegistry.is_active` (true if status=pass)
+- `status: "gated_no_access"` is not a VRAM result. Leave the model pending until the license is accepted and the test is re-run
 
 ---
 
@@ -291,9 +292,41 @@ The coding agent will read these results and populate:
 - Not required for Phase 0 GPU tests
 - Redis is only needed for the full app (Celery queues)
 
-### Gated model access denied (Krea 2 Raw)
-- Accept license at https://huggingface.co/krea/Krea-2-Raw
-- Run `huggingface-cli login` with valid token
+### Gated model access denied (401/403)
+
+Hugging Face returns 401, 403, or `GatedRepoError` when the account running the download has not accepted that repo's license. The same steps cover every gated repo in this kit. `vram_fit.py` writes `status: "gated_no_access"` with `repo_id` set to the repo that refused access. That status is not `missing_weights` and not `fail_vram`. It does not record `vram_fit`.
+
+1. Log in with the owner's Hugging Face account (do not paste the token into chat, a commit, or a log):
+   ```bash
+   hf auth login
+   ```
+   `huggingface-cli login` is the same step on older hubs.
+2. Open each repo below and click Accept on the license. A repo you have not accepted will keep returning 401/403.
+3. Retry the test. A later `pass` or `fail_vram` is the first VRAM result.
+
+Gated repos (Hugging Face API `gated: auto`, checked 2026-11-27):
+
+- [Lightricks/LTX-2.5](https://huggingface.co/Lightricks/LTX-2.5)
+- [Lightricks/LTX-2.5-22b-IC-LoRA-Day-To-Night](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Day-To-Night)
+- [Lightricks/LTX-2.5-22b-IC-LoRA-Clean-Plate](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Clean-Plate)
+- [Lightricks/LTX-2.5-22b-IC-LoRA-Water-Simulation](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Water-Simulation)
+- [Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler)
+- [Lightricks/LTX-2.5-22b-IC-LoRA-Deblur](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Deblur)
+- [Lightricks/LTX-2.5-22b-IC-LoRA-Decompression](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Decompression)
+- [Lightricks/LTX-2.5-22b-IC-LoRA-Colorization](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Colorization)
+- [Lightricks/LTX-2.5-22b-LoRA-Cinemagraph](https://huggingface.co/Lightricks/LTX-2.5-22b-LoRA-Cinemagraph)
+- [Lightricks/LTX-2.5-22b-LoRA-Slow-Motion-Control](https://huggingface.co/Lightricks/LTX-2.5-22b-LoRA-Slow-Motion-Control)
+- [Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients)
+- [Lightricks/LTX-2.5-22b-IC-LoRA-SDR-To-HDR](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-SDR-To-HDR)
+- [Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render)
+- [Lightricks/LTX-2.5-22b-IC-LoRA-Refine-Details](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Refine-Details)
+- [Lightricks/LTX-2.5-22b-IC-LoRA-Restore](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Restore)
+- [Lightricks/LTX-2.5-22b-IC-LoRA-Alpha-Gen](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Alpha-Gen)
+- [krea/Krea-2-Turbo](https://huggingface.co/krea/Krea-2-Turbo)
+- [krea/Krea-2-Raw](https://huggingface.co/krea/Krea-2-Raw)
+- [black-forest-labs/flux-3-image-klein](https://huggingface.co/black-forest-labs/flux-3-image-klein)
+
+The other repos this kit downloads (MiniMax H3, MiniMax-H3-Image, Wan 2.2 I2V, Wan 2.2 T2V, Wan Animate 2, Bernini-R, Bernini-R-Diffusers, Z-Image-Turbo) returned `gated: false` on that check.
 
 ### SGLang installation issues
 - SGLang is **optional** for Phase 0

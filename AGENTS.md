@@ -90,6 +90,7 @@ Before writing any code, read these documents in this exact order:
    - API responses return `{"is_set": true}`, never the value
    - Logs MUST NOT contain `CIVITAI_API_KEY`, `HF_TOKEN`, etc. (v1 Section 8.4)
    - See addendum Section A4.5 for secret handling
+   - A gated Hugging Face repo is not a reason to copy weights elsewhere or to share a token. See **Gated Hugging Face models** below.
 
 ### Implementation Discipline
 
@@ -102,8 +103,9 @@ Before writing any code, read these documents in this exact order:
 8. **Phase 0 GPU Measurements Come From Owner**
    - **YOU HAVE NO GPU** — do not fake VRAM measurements
    - Read `phase0/results/*.json` (if present) to populate `ModelRegistry.fits_target_vram` etc.
-   - If results are missing, default flags to `false`/`unknown` and proceed to Phase 1+
-   - DO NOT mark a model as fitting 32 GB without actual Phase 0 results
+   - If results are missing, or `status` is `gated_no_access`, leave the model pending and proceed to Phase 1+
+   - `gated_no_access` is not a VRAM measurement. Do not set `fits_target_vram` from it
+   - DO NOT mark a model as fitting 32 GB without actual Phase 0 results whose `status` is `pass` or `fail_vram`
 
 9. **Use Existing Patterns**
    - Copy the structure of existing routers, services, Celery tasks, models, schemas
@@ -114,6 +116,41 @@ Before writing any code, read these documents in this exact order:
     - Every feature section in the addendum ends with acceptance criteria in GIVEN/WHEN/THEN format
     - A feature is complete when all its criteria pass
     - Write tests that verify these criteria
+
+## Gated Hugging Face models
+
+Some weights will not download until the repository owner accepts the license on huggingface.co while logged into their own account. A **401**, a **403**, or `huggingface_hub.errors.GatedRepoError` means that, and only that.
+
+- It is not a model failure.
+- It is not a reason to set `fits_target_vram` to false, and not a reason to set it to true.
+- Treat `phase0/results/*.json` with `"status": "gated_no_access"` the same way you treat a missing Phase 0 result: leave the model pending and wait for the owner to accept the license and re-run.
+- Do not work around the gate. No alternate mirrors, no re-uploads of the weights, no copied token, no token pasted into chat, logs, or git.
+- Never print or commit `HF_TOKEN` or any `hf_...` string. Phase 0 redacts tokens before it writes `errors`.
+
+`gated_no_access` is a different status from `missing_weights` and from `fail_vram`. The JSON includes `repo_id` and a hint to run `hf auth login` or `huggingface-cli login`, accept the license on that repo's page, and retry. `vram_fit` is omitted on purpose.
+
+These repos returned `gated: auto` from the Hugging Face API on 2026-11-27. Every other repo this kit names (MiniMax H3, MiniMax-H3-Image, Wan 2.2 I2V, Wan 2.2 T2V, Wan Animate 2, Bernini-R, Bernini-R-Diffusers, Z-Image-Turbo, FLUX.2-klein-4B, Qwen-Image-2.1, Bernini-R-S2V) returned `gated: false`.
+
+- [Lightricks/LTX-2.5](https://huggingface.co/Lightricks/LTX-2.5)
+- Creative Lab collection ([Lightricks/ltx-25-creative-lab](https://huggingface.co/collections/Lightricks/ltx-25-creative-lab)), all 15 repos:
+  - [Lightricks/LTX-2.5-22b-IC-LoRA-Day-To-Night](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Day-To-Night)
+  - [Lightricks/LTX-2.5-22b-IC-LoRA-Clean-Plate](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Clean-Plate)
+  - [Lightricks/LTX-2.5-22b-IC-LoRA-Water-Simulation](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Water-Simulation)
+  - [Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler)
+  - [Lightricks/LTX-2.5-22b-IC-LoRA-Deblur](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Deblur)
+  - [Lightricks/LTX-2.5-22b-IC-LoRA-Decompression](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Decompression)
+  - [Lightricks/LTX-2.5-22b-IC-LoRA-Colorization](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Colorization)
+  - [Lightricks/LTX-2.5-22b-LoRA-Cinemagraph](https://huggingface.co/Lightricks/LTX-2.5-22b-LoRA-Cinemagraph)
+  - [Lightricks/LTX-2.5-22b-LoRA-Slow-Motion-Control](https://huggingface.co/Lightricks/LTX-2.5-22b-LoRA-Slow-Motion-Control)
+  - [Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients)
+  - [Lightricks/LTX-2.5-22b-IC-LoRA-SDR-To-HDR](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-SDR-To-HDR)
+  - [Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render)
+  - [Lightricks/LTX-2.5-22b-IC-LoRA-Refine-Details](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Refine-Details)
+  - [Lightricks/LTX-2.5-22b-IC-LoRA-Restore](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Restore)
+  - [Lightricks/LTX-2.5-22b-IC-LoRA-Alpha-Gen](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Alpha-Gen)
+- [krea/Krea-2-Turbo](https://huggingface.co/krea/Krea-2-Turbo)
+- [krea/Krea-2-Raw](https://huggingface.co/krea/Krea-2-Raw)
+- [black-forest-labs/flux-3-image-klein](https://huggingface.co/black-forest-labs/flux-3-image-klein)
 
 ---
 
@@ -186,14 +223,15 @@ Before writing any code, read these documents in this exact order:
 ### Your Workflow:
 
 1. **Build Phase 1+ assuming Phase 0 results will arrive later:**
-   - If `phase0/results/<model>.json` exists, read it and populate:
+   - If `phase0/results/<model>.json` exists and `status` is `pass` or `fail_vram`, read it and populate:
      - `ModelRegistry.fits_target_vram` (true/false from `vram_fit` field)
      - `ModelRegistry.peak_vram_gb` (from `peak_vram_gb` field)
      - `ModelRegistry.load_time_sec` (from `load_time_sec` field)
-   - If results are missing, default to:
-     - `fits_target_vram = false`
-     - `is_active = false` (models inactive until proven)
-     - UI shows "Phase 0 pending" or "VRAM fit: unknown"
+   - If `status` is `gated_no_access`, do not read `vram_fit`. Wait for the owner.
+   - If results are missing, or `status` is `gated_no_access`, default to:
+     - Do not write `fits_target_vram` from that file. Leave the seed unknown (`false` only as the initial unset default, not as a measured failure)
+     - `is_active = false` (models inactive until the owner accepts the license and re-runs)
+     - UI shows "Phase 0 pending" or "Hugging Face license not accepted"
 
 2. **Never fake GPU measurements:**
    - DO NOT set `fits_target_vram = true` without actual Phase 0 results
@@ -415,7 +453,7 @@ IMAGE_MODELS = [
 # - MiniMax-H3-Image: https://huggingface.co/MiniMaxAI/MiniMax-H3-Image
 ```
 
-**After Phase 0:** Read `phase0/results/*.json` and update `fits_target_vram` flags.
+**After Phase 0:** Read `phase0/results/*.json` and update `fits_target_vram` only when `status` is `pass` or `fail_vram`. `gated_no_access` stays pending.
 
 ---
 
@@ -423,7 +461,7 @@ IMAGE_MODELS = [
 
 If you encounter:
 - **TBD items** → Stub behind a feature flag and move on
-- **Missing Phase 0 results** → Default to `fits_target_vram = false`, models inactive
+- **Missing Phase 0 results, or `gated_no_access`** → Leave the model pending. Do not record a VRAM failure. Models stay inactive until the owner re-runs.
 - **Unclear spec** → Follow the addendum; if truly ambiguous, implement the safest/simplest path
 - **v1 conflict** → The addendum wins for changed rows (see Section A2); v1 wins elsewhere
 

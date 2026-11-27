@@ -289,13 +289,18 @@ Phase 0 is run by the repository owner (Sidney) on his local RTX 5090 PC using t
 
 **Your Workflow:**
 1. **Build Phase 1+ assuming Phase 0 results will arrive later**
-2. **If `phase0/results/<model>.json` exists:**
+2. **If `phase0/results/<model>.json` exists and `status` is `pass` or `fail_vram`:**
    - Read it and populate `ModelRegistry.fits_target_vram` from `vram_fit` field
    - Set `ModelRegistry.peak_vram_gb`, `load_time_sec` from results
 3. **If results are missing:**
-   - Default `fits_target_vram = false`
+   - Leave `fits_target_vram` at the unset default
    - Models stay inactive until proven
    - UI shows "Phase 0 pending" or "VRAM fit: unknown"
+4. **If `status` is `gated_no_access`:**
+   - This is a Hugging Face 401/403 or `GatedRepoError`. The owner has not accepted that repo's license. It is not `missing_weights`, not `fail_vram`, and not a model failure
+   - Do not set `fits_target_vram` from this file. Do not mark the model as failing VRAM
+   - Treat it like pending Phase 0 and wait for the owner to accept the license and re-run
+   - The JSON names `repo_id` and a login hint. Never print or commit an HF token, and do not work around the gate with a mirror, a re-upload, or a shared token
 
 **Never fake GPU measurements.** See AGENTS.md for the complete Phase 0 handoff protocol.
 

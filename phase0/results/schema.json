@@ -77,8 +77,12 @@
     },
     "status": {
       "type": "string",
-      "enum": ["pass", "fail_vram", "error", "missing_weights", "pipeline_unavailable", "not_implemented"],
-      "description": "Test outcome"
+      "enum": ["pass", "fail_vram", "error", "missing_weights", "pipeline_unavailable", "not_implemented", "gated_no_access"],
+      "description": "Test outcome. gated_no_access means Hugging Face returned 401/403 or GatedRepoError because the owner has not accepted the license. It is not a VRAM failure, not missing_weights, and must not set fits_target_vram."
+    },
+    "repo_id": {
+      "type": "string",
+      "description": "Hugging Face repo id when status is gated_no_access (for example Lightricks/LTX-2.5). No token."
     },
     "errors": {
       "type": "array",

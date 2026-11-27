@@ -44,12 +44,62 @@ def test_schema():
         assert "$schema" in schema, "Missing $schema field"
         assert "properties" in schema, "Missing properties"
         assert "model_key" in schema["properties"], "Missing model_key property"
+        statuses = schema["properties"]["status"]["enum"]
+        assert "gated_no_access" in statuses, "gated_no_access missing from status enum"
+        assert "missing_weights" in statuses
+        assert "fail_vram" in statuses
+        assert statuses.count("gated_no_access") == 1
         
         print(f"  ✅ schema.json valid ({len(schema['properties'])} properties)")
         return True
     except Exception as e:
         print(f"  ❌ Schema validation failed: {e}")
         return False
+
+def test_gated_no_access_detection():
+    """401/403 and GatedRepoError become gated_no_access and never store a token."""
+    print("Testing gated_no_access detection...")
+    sys.path.insert(0, str(Path(__file__).parent))
+    import vram_fit
+
+    class GatedRepoError(Exception):
+        pass
+
+    gated = GatedRepoError(
+        "Access to model Lightricks/LTX-2.5 is restricted. "
+        "You must be authenticated to access it. token=hf_supersecretvalue"
+    )
+    wrapped = OSError("from_pretrained failed")
+    wrapped.__cause__ = gated
+    assert vram_fit.exception_is_gated(wrapped)
+    assert vram_fit.repo_id_from_exception(wrapped) == "Lightricks/LTX-2.5"
+    result = vram_fit.as_gated_or_none("ltx_2_5", wrapped, "Lightricks/LTX-2.5")
+    assert result is not None
+    assert result["status"] == "gated_no_access"
+    assert result["repo_id"] == "Lightricks/LTX-2.5"
+    assert "vram_fit" not in result
+    blob = json.dumps(result)
+    assert "hf_supersecretvalue" not in blob
+
+    class Response:
+        status_code = 403
+
+    class HfHubHTTPError(Exception):
+        def __init__(self):
+            super().__init__("403 Client Error for krea/Krea-2-Raw")
+            self.response = Response()
+
+    denied = vram_fit.as_gated_or_none("krea_2_raw", HfHubHTTPError(), "krea/Krea-2-Raw")
+    assert denied["status"] == "gated_no_access"
+    assert denied["repo_id"] == "krea/Krea-2-Raw"
+
+    class Plain(Exception):
+        pass
+
+    assert vram_fit.as_gated_or_none("minimax_h3", Plain("cuda oom"), "MiniMaxAI/MiniMax-H3") is None
+    print("  ✅ gated_no_access detection OK")
+    return True
+
 
 def main():
     print("Phase 0 CI Tests (CPU-only)")
@@ -59,6 +109,7 @@ def main():
     tests = [
         ("Script imports", test_imports),
         ("Results schema", test_schema),
+        ("gated_no_access detection", test_gated_no_access_detection),
     ]
     
     results = []
