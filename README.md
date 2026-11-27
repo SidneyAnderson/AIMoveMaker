@@ -2,6 +2,8 @@
 
 End-to-end AI film production platform (local-first NLE). Storyboard + Canvas for creative (T2I/I2I/inpaint/outpaint/ControlNet/LoRA + non-destructive pixel editing), Timeline multi-track NLE for engineering (LTX/WAN video, MusicGen/AudioGen/TTS/lipsync, RIFE interp, FFmpeg export). Advanced features now complete: full dnd-kit timeline interaction, batch queues with live progress, real-time notifications (email+webhook+WS), prompt templates+history, tiered snapshots, PNG sequence export, and robust pipelines. Generate images, videos, music, sound effects, voiceovers, and lip-synced output — all from a browser-based timeline editor.
 
+> **For coding agents:** See [`AGENTS.md`](AGENTS.md) for Movie Maker implementation instructions and the Phase 0 GPU test handoff.
+
 ## Prerequisites
 
 | Dependency | Version | Required |

@@ -2,6 +2,8 @@
 
 This folder contains the Product Requirements Documents (PRDs) for the AI Movie Maker end-to-end AI film production platform.
 
+> **For coding agents:** Start with [`/AGENTS.md`](../AGENTS.md) for implementation instructions, hard rules, and the Phase 0 GPU test handoff. The owner's RTX 5090 test kit is in [`/phase0/`](../phase0/).
+
 ---
 
 ## Core Documentation

@@ -3,9 +3,11 @@
 **Agent-Ready Technical Implementation Guide**
 
 **Version:** 1.0  
-**Date:** 26 November 2026  
+**Date:** 27 November 2026  
 **Target:** Coding agents building Movie Maker features on AIMoveMaker v1 codebase  
-**Foundation:** Addendum v1.2, Integration Map, actual AIMoveMaker code at `/workspace`
+**Foundation:** Addendum v1.3, Integration Map, actual AIMoveMaker code at `/workspace`
+
+> **For coding agents:** Start with [`/AGENTS.md`](../AGENTS.md) for comprehensive instructions, hard rules, and the Phase 0 GPU test handoff. This guide provides implementation details; AGENTS.md provides the workflow.
 
 ---
 
@@ -262,22 +264,38 @@ def downgrade() -> None:
 
 This section provides detailed implementation steps for each phase. See `/workspace/PRD/MovieMaker_Integration_Map.md` for the complete file-by-file breakdown.
 
-### Phase 0: H3 + LoRA + Converter Proof (4–6d)
+### Phase 0: H3 + LoRA + Converter Proof (4–6d) — **Owner Runs Locally**
 
 **Goal:** Prove MiniMax H3 + LoRA + ComfyUI→Diffusers converter + FP8/NVFP4 quantization on RTX 5090 within 32 GB VRAM. Spike outside main app.
 
-**Key Files:**
-- `.venvs/h3/` (isolated venv)
-- `scripts/spikes/h3_roundtrip_test.py`
-- `backend/pipelines/converters/h3_converter.py` (prototype)
-- `backend/hardware_profile.py` (add capability checks)
+**⚠️ IMPORTANT: YOU DO NOT HAVE A GPU.**
 
-**Core Tasks:**
-1. Create isolated H3 venv with `diffusers>=0.40`, `torchao`
-2. Prototype converter: detect layout, split QKV, expand AdaLN (TBD math)
-3. Test FP8/NVFP4 quantization
-4. Benchmark on RTX 5090: H3 + 1 LoRA < 32 GB VRAM
-5. Update `hardware_profile.py` with `sm_120` detection
+Phase 0 is run by the repository owner (Sidney) on his local RTX 5090 PC using the test kit in `/phase0/`.
+
+**Test Kit:** See [`/phase0/README.md`](../phase0/README.md)
+- `phase0/env_check.py` — GPU/CUDA/driver/library check
+- `phase0/vram_fit.py` — VRAM fit tests for all models
+- `phase0/converter_check.py` — H3 converter prototype (stub)
+- `phase0/run_all.ps1` / `phase0/run_all.sh` — Full test suite
+
+**Your Workflow:**
+1. **Build Phase 1+ assuming Phase 0 results will arrive later**
+2. **If `phase0/results/<model>.json` exists:**
+   - Read it and populate `ModelRegistry.fits_target_vram` from `vram_fit` field
+   - Set `ModelRegistry.peak_vram_gb`, `load_time_sec` from results
+3. **If results are missing:**
+   - Default `fits_target_vram = false`
+   - Models stay inactive until proven
+   - UI shows "Phase 0 pending" or "VRAM fit: unknown"
+
+**Never fake GPU measurements.** See AGENTS.md for the complete Phase 0 handoff protocol.
+
+**Key Files (created by owner after tests):**
+- `phase0/results/minimax_h3.json`
+- `phase0/results/krea_2_turbo.json`
+- `phase0/results/z_image_turbo.json`
+- `phase0/results/flux_3_image_klein.json`
+- ... etc (see `phase0/results/schema.json`)
 
 **TBD Gate:** Pruned AdaLN expansion math must pass visual/audio test
 
