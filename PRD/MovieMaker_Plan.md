@@ -2,6 +2,8 @@
 
 **Gap Analysis & Phased Plan**
 
+> **Superseded on Windows deployment (November 27, 2026):** Addendum v1.4 as amended makes WSL 2 (Ubuntu 22.04+) the only Windows path. Ignore the references on this page to a native Windows installer, Memurai, or `scripts/install.ps1`.
+
 **Version:** Updated 2026-11-26  
 **Estimate:** 41–58 days across Phases 0–5 (this page). **Superseded for delivery by addendum v1.4: 49–67 days (estimate).**  
 **Summary:** Code-verified multi-user gap analysis updated for Sidney's 2026-11-25 decisions: Redis/Celery/RBAC retained as foundation, runtime-agnostic standard weights, Import Model convert+quantize pipeline with safety gate, and Seed Hunter v3. The 41–58 figure remains the record of that page. v1.4 adds the core-operation routing layer, Ref2VA and IC-LoRA gates, and a separate Bernini-R virtualenv, and replaces the delivery estimate with 49–67 days (estimate) in Section A16.

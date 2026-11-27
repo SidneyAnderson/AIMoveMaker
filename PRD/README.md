@@ -26,9 +26,9 @@ Word format version of the baseline PRD v1.0.
 **Version:** 1.4 — Addendum to PRD v1.0  
 **Status:** Specification for the v1.4 build — not yet implemented  
 **Date:** November 27, 2026  
-**Changelog:** v1.4 defines one core-operation set for every video family (generate, continue, edit, keep consistent, restore/refine). Family tools are internal routing (Section A19). Delivery estimate is 49–67 days (estimate), superseding 41–58. [Bernini-R](https://huggingface.co/ByteDance/Bernini-R-Diffusers) is the internal Wan edit/reference route, in its own virtualenv because upstream pins `diffusers==0.35.2`. Bernini-R-S2V stays out of scope. v1.3 adds Section A18 keyframe image-model defaults: shipped T2I default Krea 2 Turbo (`krea_2_turbo`), automatic fallback Z-Image-Turbo (`z_image_turbo`), shipped edit/consistency default FLUX 3 Image Klein (`flux_3_image_klein`), MiniMax-H3-Image becomes H3-profile default only after license authorization + 32GB VRAM fit gates; per-profile `default_image_model_key` / `default_image_edit_model_key`; Import Model applies to image models. v1.2 moves LTX core to LTX-2.5, pins Diffusers ≥ 0.40, adds Wan Animate 2 pipeline support.
+**Changelog:** Amended November 27, 2026: Windows hosts run the application inside WSL 2 only, and the native Windows installer and Memurai are removed. v1.4 defines one core-operation set for every video family (generate, continue, edit, keep consistent, restore/refine). Family tools are internal routing (Section A19). Delivery estimate is 49–67 days (estimate), superseding 41–58. [Bernini-R](https://huggingface.co/ByteDance/Bernini-R-Diffusers) is the internal Wan edit/reference route, in its own virtualenv because upstream pins `diffusers==0.35.2`. Bernini-R-S2V stays out of scope. v1.3 adds Section A18 keyframe image-model defaults: shipped T2I default Krea 2 Turbo (`krea_2_turbo`), automatic fallback Z-Image-Turbo (`z_image_turbo`), shipped edit/consistency default FLUX 3 Image Klein (`flux_3_image_klein`), MiniMax-H3-Image becomes H3-profile default only after license authorization + 32GB VRAM fit gates; per-profile `default_image_model_key` / `default_image_edit_model_key`; Import Model applies to image models. v1.2 moves LTX core to LTX-2.5, pins Diffusers ≥ 0.40, adds Wan Animate 2 pipeline support.
 
-The build-contract addendum extending AI Movie Maker v1 with the Movie Maker layers: MiniMax H3 runtime-agnostic engine, Import Model converter pipeline with safety gates, project-level core model lock, multi-user model library, Seed Hunter v3 workflow (6-field structured prompts, RefMods, 3-seed Stage-1 previews, 3D latent upscale Stage-2, dialogue cloner, 17n+5 seamless continuation), keyframe image model defaults (Krea 2 Turbo, FLUX 3 Image Klein, MiniMax-H3-Image with gates), LTX-2.5 & Wan Animate 2 support, NLE seam finishing tools, and native Redis installers (Ubuntu/Windows without Docker).
+The build-contract addendum extending AI Movie Maker v1 with the Movie Maker layers: MiniMax H3 runtime-agnostic engine, Import Model converter pipeline with safety gates, project-level core model lock, multi-user model library, Seed Hunter v3 workflow (6-field structured prompts, RefMods, 3-seed Stage-1 previews, 3D latent upscale Stage-2, dialogue cloner, 17n+5 seamless continuation), keyframe image model defaults (Krea 2 Turbo, FLUX 3 Image Klein, MiniMax-H3-Image with gates), LTX-2.5 & Wan Animate 2 support, NLE seam finishing tools, and a native Redis install on Ubuntu, including WSL 2 on Windows hosts (no Docker).
 
 **Key Features:**
 - Immutable per-project core video model ([`minimax_h3`](https://huggingface.co/MiniMaxAI/MiniMax-H3), [`ltx_2_5`](https://huggingface.co/Lightricks/LTX-2.5), or [`wan_bernini`](https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B))
@@ -90,7 +90,7 @@ File-by-file integration blueprint mapping the phased plan onto the AIMoveMaker 
 **Date:** 26 November 2026  
 **Target:** Coding agents building Movie Maker features on AIMoveMaker v1 codebase
 
-Agent-ready technical implementation guide grounded in the actual AIMoveMaker code at `/workspace`. Provides complete repository map, naming conventions, existing patterns to copy, and hard rules (multi-user RBAC, immutable project core model, runtime-agnostic Diffusers/SGLang only, no Docker, never commit secrets). Breaks each phase (P0–P5) into small work packages with exact files to modify, function signatures, data model changes, Alembic migrations, API endpoints, Celery queue assignments, test expectations, acceptance criteria, and definition of done.
+Agent-ready technical implementation guide grounded in the actual AIMoveMaker code. The guide writes the repository root as `/workspace`, the path in use when it was drafted; read that as the root of this repo. Provides complete repository map, naming conventions, existing patterns to copy, and hard rules (multi-user RBAC, immutable project core model, runtime-agnostic Diffusers/SGLang only, no Docker, never commit secrets). Breaks each phase (P0–P5) into small work packages with exact files to modify, function signatures, data model changes, Alembic migrations, API endpoints, Celery queue assignments, test expectations, acceptance criteria, and definition of done.
 
 **Contents:**
 - Repository map & directory structure
@@ -105,7 +105,7 @@ Agent-ready technical implementation guide grounded in the actual AIMoveMaker co
 **Date:** 26 November 2026  
 **Target:** Coding agents building Movie Maker UI on AIMoveMaker v1 React/Vite frontend
 
-Complete UI/UX design specification grounded in the actual React/Vite frontend code at `/workspace/frontend/src`. Covers information architecture (navigation by role), design system (blue-green theme, Shadcn/ui components), and detailed screen-by-screen specifications with layouts, states (empty/loading/error/progress), role permissions, and WebSocket real-time features. Includes ASCII wireframes and Mermaid flow diagrams.
+Complete UI/UX design specification grounded in the actual React/Vite frontend code in `frontend/src` (written as `/workspace/frontend/src` inside the spec). Covers information architecture (navigation by role), design system (blue-green theme, Shadcn/ui components), and detailed screen-by-screen specifications with layouts, states (empty/loading/error/progress), role permissions, and WebSocket real-time features. Includes ASCII wireframes and Mermaid flow diagrams.
 
 **Contents:**
 - Information architecture & route structure
@@ -144,14 +144,18 @@ Previous version (superseded by v1.4). Retained for historical reference and cha
 ```
 prd_text.txt (v1.0 baseline)
     ↓ extends
-addendum/AIMoveMaker_PRD_Addendum_MovieMaker_v1.2.md (build contract)
+addendum/AIMoveMaker_PRD_Addendum_MovieMaker_v1.4.md (build contract)
     ↓ analyzed by
 MovieMaker_Plan.md (gap analysis & phased roadmap)
     ↓ mapped to codebase by
 MovieMaker_Integration_Map.md (file-by-file integration plan)
+    ↓ turned into work packages by
+BUILD_GUIDE.md and UI_UX_SPEC.md (agent-ready implementation guides)
 ```
 
-**Previous Version:**
+**Previous Versions:**
+- history/AIMoveMaker_PRD_Addendum_MovieMaker_v1.3.md (superseded by v1.4)
+- history/AIMoveMaker_PRD_Addendum_MovieMaker_v1.2.md (superseded by v1.3)
 - history/AIMoveMaker_PRD_Addendum_MovieMaker_v1.1.md (superseded by v1.2)
 
 ---
@@ -187,7 +191,7 @@ All PRD documents follow the build-contract convention system:
 
 6. **Admin secrets in `.env`:** Server secrets (`VASTAI_API_KEY`, `HF_TOKEN`, `CIVITAI_API_KEY`, `SMTP_*`) move to admin-only atomic `.env` (mode `0600`). Optional per-user overrides permitted.
 
-7. **Native Redis installers:** Ubuntu `redis-server`, Windows Memurai/native Redis. Docker is explicitly not used.
+7. **Ubuntu and WSL 2 only:** Native `redis-server` on Ubuntu 22.04+. A Windows host runs the application inside WSL 2. There is no native Windows installer and no Memurai. Docker is explicitly not used.
 
 8. **Celery GPU routing:** Per-engine queues (`gpu_h3`, `gpu_ltx`, `gpu_wan`, `gpu_audio`, `import_cpu`) with workers in isolated `.venvs/<engine>`.
 
@@ -221,4 +225,4 @@ All PRD documents follow the build-contract convention system:
 
 ---
 
-*Last Updated: November 26, 2026*
+*Last Updated: November 27, 2026*

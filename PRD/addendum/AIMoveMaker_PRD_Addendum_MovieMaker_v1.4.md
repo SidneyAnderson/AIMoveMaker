@@ -7,7 +7,7 @@ Movie Maker Layers
 | Version | 1.4 — Addendum to PRD v1.0 |
 | Status | Specification for the v1.4 build — not yet implemented |
 | Date | November 27, 2026 |
-| Changelog | v1.4 (November 27, 2026): One user-facing operation set for every core family (Section A19). The five core operations are generate shot, continue/extend, edit/re-render part of a shot, keep consistent from references, and restore/upscale/refine. Family tools (H3 FL2VA/Ref2VA, Wan 2.2 / Wan Animate 2 / Bernini-R, LTX-2.5 IC-LoRAs) are internal routing only. Schedule revised to 49–67 days (estimate), superseding 41–58. Also added [Bernini-R](https://huggingface.co/ByteDance/Bernini-R-Diffusers) as the internal editing/reference route for `wan_bernini`, gated by Phase 0 and a separate virtualenv (`diffusers==0.35.2`). Bernini-R-S2V stays out of scope. v1.3 (November 26, 2026): Added Section A18 keyframe image-model defaults. Shipped T2I default is [Krea 2 Turbo](https://huggingface.co/krea/Krea-2-Turbo) (`krea_2_turbo`) with [Z-Image-Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) as the license/VRAM fallback; shipped edit/consistency default is [FLUX 3 Image Klein](https://huggingface.co/black-forest-labs/flux-3-image-klein); [MiniMax-H3-Image](https://huggingface.co/MiniMaxAI/MiniMax-H3-Image) is the H3-profile default only after license-authorization and 32 GB VRAM gates. Import Model and the LoRA library apply to image models. v1.2 (November 26, 2026): Moved the committed LTX core from LTX 2.3 to LTX-2.5 (`ltx_2_5` / `ltx_2_5_default`); pinned Diffusers ≥ 0.40 for LTX-2.5 (`LTX2Pipeline` / `LTX25AutoBlocks`) and Wan Animate 2 (`WanAnimate2Pipeline`); IC-LoRA, Prompt Relay remain TBD capability flags; Wan 2.5–3.0 and Hailuo are hosted-only and out of scope for local engines. |
+| Changelog | v1.4 amendment (November 27, 2026): Windows hosts run the application inside WSL 2 (Ubuntu 22.04+) only. The native Windows installer, `scripts/install.ps1`, and Memurai are removed (Section A0.2 item 8, INSTALL-03). v1.4 (November 27, 2026): One user-facing operation set for every core family (Section A19). The five core operations are generate shot, continue/extend, edit/re-render part of a shot, keep consistent from references, and restore/upscale/refine. Family tools (H3 FL2VA/Ref2VA, Wan 2.2 / Wan Animate 2 / Bernini-R, LTX-2.5 IC-LoRAs) are internal routing only. Schedule revised to 49–67 days (estimate), superseding 41–58. Also added [Bernini-R](https://huggingface.co/ByteDance/Bernini-R-Diffusers) as the internal editing/reference route for `wan_bernini`, gated by Phase 0 and a separate virtualenv (`diffusers==0.35.2`). Bernini-R-S2V stays out of scope. v1.3 (November 26, 2026): Added Section A18 keyframe image-model defaults. Shipped T2I default is [Krea 2 Turbo](https://huggingface.co/krea/Krea-2-Turbo) (`krea_2_turbo`) with [Z-Image-Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) as the license/VRAM fallback; shipped edit/consistency default is [FLUX 3 Image Klein](https://huggingface.co/black-forest-labs/flux-3-image-klein); [MiniMax-H3-Image](https://huggingface.co/MiniMaxAI/MiniMax-H3-Image) is the H3-profile default only after license-authorization and 32 GB VRAM gates. Import Model and the LoRA library apply to image models. v1.2 (November 26, 2026): Moved the committed LTX core from LTX 2.3 to LTX-2.5 (`ltx_2_5` / `ltx_2_5_default`); pinned Diffusers ≥ 0.40 for LTX-2.5 (`LTX2Pipeline` / `LTX25AutoBlocks`) and Wan Animate 2 (`WanAnimate2Pipeline`); IC-LoRA, Prompt Relay remain TBD capability flags; Wan 2.5–3.0 and Hailuo are hosted-only and out of scope for local engines. |
 | Classification | Independent Project — Confidential |
 | Intended Reader | AI Build Agent + Engineering Team |
 | Baseline | PRD v1.0 — March 13, 2026; updated May 31, 2026; Implemented v1 — Regression verified |
@@ -57,7 +57,7 @@ Agent Note: Where this document or v1 names a library, framework, or tool, use e
 
 ## A0.2 Settled Decisions and Provenance
 
-The following decisions are settled as of November 27, 2026 (items 1–9 were already settled on November 25, 2026; item 10 was added in v1.3; items 11–12 are added in v1.4). They supersede any earlier draft that assumed a single-user local queue, a `solo_creator` bypass of RBAC, a per-model capability menu, or a 35–52 / 39–56 / 41–58 day estimate.
+The following decisions are settled as of November 27, 2026 (items 1–9 were already settled on November 25, 2026; item 10 was added in v1.3; items 11–12 are added in v1.4; item 8 was amended on November 27, 2026 to make Windows deployment WSL 2 only). They supersede any earlier draft that assumed a single-user local queue, a `solo_creator` bypass of RBAC, a per-model capability menu, or a 35–52 / 39–56 / 41–58 day estimate.
 
 1. Multi-user is required. Redis 7, Celery 5, JWT/OAuth authentication, Redis pub/sub progress, the four personas (Admin, Creative, Engineer, Viewer), and the v1 role-gated project state machine MUST be kept and extended. They MUST NOT be replaced with a single-user SQLite worker queue.
 2. Each project locks one core video model family at creation (`minimax_h3`, `ltx_2_5`, or `wan_bernini`) for the entire video pipeline: shot generation, continuation, editing, and refinement. Video families are not mixed inside a project. Image keyframe models in Section A18 ([Krea 2 Turbo](https://huggingface.co/krea/Krea-2-Turbo), [Z-Image-Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo), [FLUX 3 Image Klein](https://huggingface.co/black-forest-labs/flux-3-image-klein), [MiniMax-H3-Image](https://huggingface.co/MiniMaxAI/MiniMax-H3-Image)) stay a separate image layer. Choosing one of them does not mix video families. The video-family choice is immutable in place. Migration requires cloning into a new project. [Bernini-R-S2V](https://huggingface.co/rzgar/Bernini-R-S2V) stays out of scope.
@@ -66,7 +66,7 @@ The following decisions are settled as of November 27, 2026 (items 1–9 were al
 5. Visibility for models and LoRAs is `global` or `user`, with `owner_id` on both registries.
 6. Import Model is limited to Admin and Engineer. Deleting or moving an original is allowed only for an Admin or the owner, and only when no active project or job references it.
 7. Shared secrets live in an Admin-managed server `.env` (mode `0600`). Optional per-user overrides are permitted. Secret values MUST still obey v1 Section 8.4: never returned in API responses (only `is_set`), never written to logs.
-8. Native installers MUST install Redis without Docker: `redis-server` on Ubuntu, Memurai or a native Redis build on Windows.
+8. The deployment target is Ubuntu 22.04+. On a Windows host the application runs inside WSL 2 (Ubuntu 22.04+) only. The installer MUST install Redis without Docker, as native `redis-server` inside Ubuntu. A native Windows installer, Memurai, and a native Windows Redis build are out of scope. (Amended November 27, 2026. The earlier text required a native Windows installer.)
 9. Delivery effort is 49–67 days (estimate) across Phases 0–5, with Import Model in Phase 2. This supersedes the 41–58 day (estimate) figure, which did not include a uniform core-operation contract, a Ref2VA service spike, an LTX IC-LoRA Diffusers load check, or a separate Bernini-R virtualenv. See Section A16.
 10. Keyframe image models are first-class and independent of the one-video-model-per-project lock. The shipped text-to-image default is [Krea 2 Turbo](https://huggingface.co/krea/Krea-2-Turbo), with [Z-Image-Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) as the automatic fallback when Krea 2 cannot be enabled. The shipped editing/consistency default is [FLUX 3 Image Klein](https://huggingface.co/black-forest-labs/flux-3-image-klein). [MiniMax-H3-Image](https://huggingface.co/MiniMaxAI/MiniMax-H3-Image) is the default for `h3_default` projects only after the license-authorization and 32 GB VRAM gates in Section A18 pass. The Creative MAY still pick any registered image model per keyframe. See Section A18. This image layer is not a second video family.
 11. One user-facing operation set. Every family exposes the same five core operations: generate a shot from text and/or a keyframe, continue/extend a shot, edit/re-render part of a shot, keep character/location/style consistent from references, and restore/upscale/refine. Each family MUST implement each operation, or the documented fallback in Section A19. A fallback may use only that family's own models plus non-generative finishing already in the product (ffmpeg filters, v1 RIFE interpolation, and a registered spatial upscaler). Those finishing tools are not another video family. The product MUST NOT advertise a capability as present on one family and absent on another.
@@ -133,7 +133,7 @@ This addendum specifies only the new layers and the v1 changes required to suppo
 - Generation engines behind that routing layer: MiniMax H3 FL2VA (Diffusers ≥ 0.40 or SGLang Diffusion) and Ref2VA (own SGLang service or Diffusers ModularPipeline); LTX-2.5 via Diffusers ≥ 0.40 (`LTX2Pipeline` / `LTX25AutoBlocks`) plus Creative Lab IC-LoRAs when Phase 0 verifies a Diffusers load; Wan 2.2 via Diffusers; Wan Animate 2 via `WanAnimate2Pipeline` (Diffusers ≥ 0.40); Bernini-R via ByteDance inference code in `.venvs/bernini` (`diffusers==0.35.2`).
 - Seed Hunter-style Stage-1 previews, Stage-2 latent upscale, continuation, and quality-reset helpers, for H3 projects.
 - Timeline seam finishing, blur/zoom transitions, RIFE (already in v1), upscale, and export.
-- Multi-user extensions: per-engine Celery queues, a GPU mutex, `global`/`user` visibility, Import/delete RBAC, Admin-managed `.env` secrets with optional per-user overrides, and Docker-free Redis installers for Windows and Ubuntu.
+- Multi-user extensions: per-engine Celery queues, a GPU mutex, `global`/`user` visibility, Import/delete RBAC, Admin-managed `.env` secrets with optional per-user overrides, and a Docker-free Redis install on Ubuntu (WSL 2 on Windows hosts).
 - Keyframe image-model registry pack, per-profile T2I and edit defaults, license/VRAM gates for MiniMax-H3-Image, and Import Model / LoRA-library coverage for image checkpoints (Section A18).
 
 ## A1.4 Out of Scope for v1.4
@@ -141,6 +141,7 @@ This addendum specifies only the new layers and the v1 changes required to suppo
 All v1 Section 1.3 / Section 10.2 backlog items remain out of scope unless Section A17 explicitly promotes them. In particular this addendum does NOT require:
 
 - A ComfyUI runtime, ComfyUI node graph, or Docker-based deployment (v1 Section 3.4 already forbids Docker for standard deployment; this addendum also forbids Docker for Redis).
+- A native Windows installer, Memurai, a native Windows Redis build, or a Windows service. Windows hosts run the application inside WSL 2 (INSTALL-03).
 - In-place switching of a project's core video model.
 - Mixing MiniMax H3, LTX-2.5, and Wan/Bernini as video generators inside one project, including during continuation, editing, or refinement. Image keyframe models are not this kind of mixing.
 - Real-time CRDT/OT multi-user co-editing (v1 Section 10.2). The fixed-crew model and presence behavior from v1 / Section 14 stay as they are.
@@ -167,10 +168,10 @@ Where a row says **Unchanged**, implementers MUST follow v1. Where a row says **
 | §2.3 Project State Machine | Unchanged | Draft → CreativeActive → PendingHandoff → EngActive → PendingReturn / Completed, with the same lock rules. Admin MAY still force any transition. Import Model is system-scoped (not gated by project state) but is role-gated. Video generation remains Engineer-only and still requires EngActive (or Admin). |
 | §2.4 User lifecycle, OAuth, passwords | Unchanged | |
 | §3.1 Architecture table | Extends | Keep FastAPI, React 18, Vite 5, SQLAlchemy, SQLite dev / PostgreSQL 15+ prod, Celery 5, Redis 7. Add: Diffusers ≥ 0.40 for H3, LTX-2.5 (`LTX2Pipeline` / `LTX25AutoBlocks`), and Wan Animate 2 (`WanAnimate2Pipeline`); optional SGLang Diffusion ≥ 0.5.17; torchao; NVIDIA ModelOpt; per-engine virtualenvs; GPU mutex. “No ComfyUI dependency” is restated as a hard rule for inference and for saved artifacts. |
-| §3.2 Hardware Baseline | Modifies | CUDA requirement becomes 12.8 or newer (v1 said 12.4+). OS becomes native Windows and Ubuntu 22.04+ (including the MesaAI WSL Ubuntu 22.04 box). GPU, RAM, and sm_120 inductor warning are unchanged. PyTorch MUST be a build that supports `sm_120` from a CUDA 12.8+ index. |
+| §3.2 Hardware Baseline | Modifies | CUDA requirement becomes 12.8 or newer (v1 said 12.4+). OS becomes Ubuntu 22.04+, which on a Windows host means WSL 2 (including the MesaAI WSL Ubuntu 22.04 box). Native Windows is not a deployment target. GPU, RAM, and sm_120 inductor warning are unchanged. PyTorch MUST be a build that supports `sm_120` from a CUDA 12.8+ index. |
 | §3.3 Hardware Profile Service | Extends | MUST also report FP8 / NVFP4 quantization capability, sparse-attention backend availability, and a llama-server VRAM budget when an LLM assistant is configured. `eager` compile on sm_120 remains mandatory. |
-| §3.4 Deployment — No Docker | Modifies | Redis MUST be installed natively, not via `docker run redis:7`. Ubuntu: `redis-server`. Windows: Memurai or a native Redis build, run as a service. The Vast.ai remote-side isolation exception in v1 is unchanged. |
-| §3.5 Directory structure | Extends | Add library roots, converted-model storage, import staging, archive roots, and `.venvs/<engine>`. Install root on Windows is configurable (default TBD in the installer). Path-traversal rules in §8.4 are extended to those roots. |
+| §3.4 Deployment — No Docker | Modifies | Redis MUST be installed natively, not via `docker run redis:7`. Use `redis-server` inside Ubuntu, including inside WSL 2 on a Windows host. Memurai and native Windows Redis builds are not used. The Vast.ai remote-side isolation exception in v1 is unchanged. |
+| §3.5 Directory structure | Extends | Add library roots, converted-model storage, import staging, archive roots, and `.venvs/<engine>`. The install root follows INSTALL-05, including inside WSL 2 on a Windows host. Path-traversal rules in §8.4 are extended to those roots. |
 | §4 Creative Domain | Extends (keyframe defaults) | `Keyframe.model_id` remains the per-keyframe image-model selector and is still not used to select a core video family. New keyframes default that field from the workflow profile as specified in Section A18. FLUX and SDXL remain valid registered options; they are not the shipped defaults. |
 | §5.1 Timeline Editor | Extends | Adds seam grading, blur/zoom transitions, optional cadence limiting, and a `caption` track type in Phase 4. |
 | §5.2 Video Generation | Modifies | Core video family is chosen at project creation and covers the whole video pipeline. The user-facing contract is the five core operations in Section A19, identical on every family. Names such as `t2va`, `fl2va`, `ref2va`, `r2v`, and `rv2v` are internal routes, not UI modes. Where an internal route consumes a source video, it MUST be true video-to-video and MUST NOT alias to image-only conditioning. Supported families are MiniMax H3, LTX-2.5, and Wan/Bernini. |
@@ -212,7 +213,7 @@ Where a row says **Unchanged**, implementers MUST follow v1. Where a row says **
 |---|---|
 | Local GPU | NVIDIA RTX 5090 (Blackwell, `sm_120`), 32 GB VRAM — same as v1 §3.2 |
 | System RAM | 64 GB — same as v1 |
-| Operating systems | Native Windows, and Ubuntu 22.04+ (including the MesaAI WSL Ubuntu 22.04 box) |
+| Operating systems | Ubuntu 22.04+. On a Windows host: WSL 2 running Ubuntu 22.04+ (including the MesaAI WSL Ubuntu 22.04 box). Native Windows is not a deployment target |
 | Python | 3.11+ |
 | CUDA | 12.8 or newer (modifies v1 §3.2, which required 12.4+) |
 | PyTorch | A stable or nightly build whose CUDA 12.8+ wheel supports `sm_120` |
@@ -227,9 +228,9 @@ INSTALL-01. The system MUST deploy as native virtual environments on the host OS
 
 INSTALL-02. The Ubuntu installer (`scripts/install.sh`, extending `setup.sh` / `start.sh`) MUST install and start `redis-server` natively, create the venvs, install pinned requirements, run Alembic migrations, and seed the bootstrap Admin as in v1 §2.4.1.
 
-INSTALL-03. The Windows installer (`scripts/install.ps1`) MUST install and start Redis without Docker, using Memurai or a native Redis build, running it as a Windows service. It MUST also create the venvs, run migrations, and seed the bootstrap Admin.
+INSTALL-03. On a Windows host the system MUST run inside WSL 2 (Ubuntu 22.04+) and MUST be installed with the Ubuntu installer in INSTALL-02. The build MUST NOT ship or require a native Windows installer (`scripts/install.ps1`), Memurai, a native Windows Redis build, or a Windows service. The install root and the model library roots SHOULD be on the WSL Linux filesystem. The installer SHOULD warn when one of them is under `/mnt/`, because reads from a Windows drive through that mount are slow for multi-gigabyte weights. The installer documentation SHOULD state how to raise the WSL memory limit in `.wslconfig`, because WSL limits the virtual machine's memory by default and the 37 to 60 GB imports in R8 can exceed that limit. (Amended November 27, 2026. This replaces the native Windows installer requirement.)
 
-INSTALL-04. `start.sh` / the Windows start script MUST start Redis if it is not running, start the Celery workers for the queues in Section A4.3, and start the FastAPI server. All processes MUST log in structured JSON as in v1 §8.1.
+INSTALL-04. `start.sh` MUST start Redis if it is not running, start the Celery workers for the queues in Section A4.3, and start the FastAPI server. There is no separate Windows start script: on a Windows host `start.sh` runs inside WSL 2. All processes MUST log in structured JSON as in v1 §8.1.
 
 ## A3.2 Runtime-Agnostic Rule
 
@@ -241,7 +242,7 @@ GEN-RUNTIME-03. A React SPA served by FastAPI remains the UI shell (v1 §3.1). T
 
 ## A3.3 Path and Storage Rules
 
-INSTALL-05. On Linux the default install root remains `/opt/aimoviemaker/` unless the installer is given another root. On Windows the default root is chosen by the installer and MUST be documented (exact default path TBD).
+INSTALL-05. The default install root remains `/opt/aimoviemaker/` unless the installer is given another root. This applies inside WSL 2 on a Windows host as well.
 
 INSTALL-06. File paths in API requests (`local_path`, archive folder, scan roots) MUST be validated against an allow-list of configured roots. Path traversal MUST be rejected with `error_code` `path_traversal`. This extends v1 §8.4 beyond `/opt/aimoviemaker/outputs/` and `/opt/aimoviemaker/models/`.
 
@@ -319,7 +320,7 @@ VIS-05. GET list endpoints MUST filter by these rules server-side. A request for
 
 *Modifies v1 §7.20.1 storage for shared secrets; keeps v1 §8.4 disclosure rules.*
 
-SECRET-01. Shared provider secrets MUST be stored in an Admin-managed server `.env` file with permissions `0600` (Owner read/write only on POSIX; an equivalent ACL on Windows). Keys include at least: `VASTAI_API_KEY`, `CIVITAI_API_KEY`, `HF_TOKEN`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM_ADDRESS`, `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `DISCORD_OAUTH_CLIENT_ID`, `DISCORD_OAUTH_CLIENT_SECRET`, `ELEVENLABS_API_KEY`, `SUNO_API_KEY`.
+SECRET-01. Shared provider secrets MUST be stored in an Admin-managed server `.env` file with permissions `0600` (Owner read/write only. Under WSL 2 the file MUST be on the Linux filesystem, where POSIX permissions are enforced). Keys include at least: `VASTAI_API_KEY`, `CIVITAI_API_KEY`, `HF_TOKEN`, `SMTP_HOST`, `SMTP_PORT`, `SMTP_USER`, `SMTP_PASSWORD`, `SMTP_FROM_ADDRESS`, `GOOGLE_OAUTH_CLIENT_ID`, `GOOGLE_OAUTH_CLIENT_SECRET`, `DISCORD_OAUTH_CLIENT_ID`, `DISCORD_OAUTH_CLIENT_SECRET`, `ELEVENLABS_API_KEY`, `SUNO_API_KEY`.
 
 SECRET-02. The `Setting` table remains for non-secret global and user preferences (for example `default_gpu_target`, `vram_safety_margin_pct`, `default_video_duration_s`). Secret values MUST NOT be written back into `Setting.value`.
 
@@ -343,7 +344,7 @@ SECRET-05. All v1 log-redaction and “invalid API key” error rules remain. Ci
 
 ## A4.7 Acceptance Criteria
 
-- GIVEN a running production install WHEN an operator inspects process lists THEN Redis (native `redis-server` or Memurai / native Windows Redis) and Celery workers for `gpu_h3`, `gpu_ltx`, `gpu_wan`, `gpu_audio`, and `import_cpu` are running AND no Redis container is required.
+- GIVEN a running production install WHEN an operator inspects process lists THEN Redis (native `redis-server`, inside WSL 2 on a Windows host) and Celery workers for `gpu_h3`, `gpu_ltx`, `gpu_wan`, `gpu_audio`, and `import_cpu` are running AND no Redis container is required.
 - GIVEN two GPU jobs of different families are queued WHEN the local mutex is held by the first job THEN the second job remains queued and MUST NOT allocate VRAM until the mutex is released.
 - GIVEN an Engineer imported a `user`-visibility model WHEN a second Engineer calls GET `/models/{id}` THEN the response is HTTP 404.
 - GIVEN an Admin imported a `global` model WHEN a Creative lists image-or-video models they are allowed to use THEN the model appears.
@@ -1122,7 +1123,7 @@ Conversion SHOULD be streamed/CPU-staged. Peak working set for import on the 32 
 All v1 Section 8.4 rules remain, plus:
 
 - Path allow-lists cover scan, import, and archive roots (INSTALL-06).
-- Secrets: Section A4.5. `.env` mode `0600` / Windows ACL. No secret in logs or API bodies.
+- Secrets: Section A4.5. `.env` mode `0600` on the Linux filesystem. No secret in logs or API bodies.
 - GPU mutex TTLs and heartbeats MUST prevent a dead worker from blocking the GPU indefinitely.
 - Redis loss: generation and import MUST not start; health check fails (A4.6).
 
@@ -1168,9 +1169,9 @@ Phase 2 is where Import Model lands as a product feature. Phase 0 only spikes th
 | 2 | Import Model | 7-10 days | Phase 1 library schema and `import_cpu` exist | Civitai and local intake (Admin/Engineer only), header detection, converter, quantize, test-load + sample-render gate on a `gpu_*` queue with Redis progress, disposition delete/keep/move (Admin or owner, and only if unreferenced). LoRA key conversion. |
 | 3 | Family adapters for all five core operations, then Seed Hunter extras | 14-18 days | Import can produce standard-layout runnable H3 (or H3 stays behind a flag) and the Phase 1 adapter protocol exists | Per-family adapters implementing every core operation, with native routes or the Section A19 fallback. Continuation and consistency land before Seed Hunter extras. H3 Ref2VA worker, LTX IC-LoRA route behind the Phase 0 flag, Wan Animate 2, and Bernini-R in `.venvs/bernini` (do not downgrade the app venv). Per-engine Celery GPU workers + mutex, 3-seed previews, Stage-2 latent upscale, dialogue pre-gen and force-audio (capability-flagged), 17n+5 continuation on H3, drift/reset helpers, spatial upscaler used only as a non-family finishing fallback. |
 | 4 | Prompt IDE, RefMods, LoRA gate, ASR/SAM | 6-9 days | Clip and audio APIs from Phase 3 | 6-field Singularity prompt IDE, RefMods if ported, llama-server/OpenAI scene-plan expansion (profile-specific renderers), LoRA compatibility warnings in all slots, Whisper/Qwen3-ASR, ForcedAligner, VoxCPM2, SAM3.1, optional `caption` tracks. Prompt IDE and ASR details that are not fully specified in Sections A5-A10 MUST be elaborated in a short follow-on note before Phase 4 implementation; they are in the phase plan but their field-level schemas are partially TBD. |
-| 5 | NLE seams, Vast.ai, Docker-free installers, Bernini venv | 10-13 days | Finishing APIs can consume Phase 3 outputs | Seam color/exposure/warmth, blur/zoom transitions, optional cadence limiter, real Vast.ai SSH/TLS VM worker (v1 Section 6.4 / 9.5), theme, `scripts/install.sh` (`redis-server`) and `scripts/install.ps1` (Memurai or native Windows Redis), no Docker. Installers create `.venvs/bernini` with the upstream Diffusers pin and leave the application environment on `"diffusers>=0.40"`. |
+| 5 | NLE seams, Vast.ai, Docker-free installers, Bernini venv | 10-13 days | Finishing APIs can consume Phase 3 outputs | Seam color/exposure/warmth, blur/zoom transitions, optional cadence limiter, real Vast.ai SSH/TLS VM worker (v1 Section 6.4 / 9.5), theme, `scripts/install.sh` (`redis-server`; on a Windows host it runs inside WSL 2), no Docker and no native Windows installer. The installer creates `.venvs/bernini` with the upstream Diffusers pin and leaves the application environment on `"diffusers>=0.40"`. |
 
-The six ranges sum to **49–67 days (estimate)**.
+The six ranges sum to **49–67 days (estimate)**. The November 27, 2026 amendment removed the native Windows installer from Phase 5. The Phase 5 range has not been re-estimated.
 
 No phase MAY remove Redis, Celery, or the four-persona state machine. No phase MAY drop a core operation on a family because the native tool is unverified.
 
@@ -1190,7 +1191,7 @@ v1 Section 0 example ("Audio timing offset — TBD v2"), Section 1.3 out-of-scop
 | §10.1 | xformers sm_120 status | Still relevant; eager + SDPA fallback remains mandatory. Hardware Profile adds fp8/NVFP4 capability checks. | Same rule as v1; verify again in Phase 0. |
 | §5.2 / implementation | `v2v` specified in v1 but aliased to `i2v` in code | True `v2v` is required. | Defect relative to v1 is closed by GEN-03. |
 | §3.2 | CUDA 12.4+ | Raised to 12.8+. | Modification. |
-| §3.2 / §3.4 | Linux-only deploy; `docker run redis:7` in start scripts | Native Windows + Ubuntu; native Redis (Memurai or Windows Redis; `redis-server` on Ubuntu). | Modification. |
+| §3.2 / §3.4 | Linux-only deploy; `docker run redis:7` in start scripts | Ubuntu 22.04+, with WSL 2 as the only path on a Windows host; native `redis-server` in place of the Docker hint. | Modification. |
 | §6.4 / §9.5 / §14 | Vast.ai bursting | Remains in contract; implementation stub must be replaced in Phase 5. | Already in v1 scope; not a new v2 promotion. |
 | §10.2 | Real-time multi-user collaboration (CRDT/OT) | Multi-user RBAC is required and extended; CRDT co-editing is not. | Remains v2. |
 | §10.2 | Community model marketplace | Import Model is an operator pipeline, not a marketplace. | Remains v2. |

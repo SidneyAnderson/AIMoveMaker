@@ -2,6 +2,8 @@
 
 **File-by-File Integration Blueprint**
 
+> **Superseded on Windows deployment (November 27, 2026):** Addendum v1.4 as amended makes WSL 2 (Ubuntu 22.04+) the only Windows path. Ignore the references on this page to a native Windows installer, Memurai, or `scripts/install.ps1`.
+
 **Version:** Updated 2026-11-26  
 **Estimate:** 41–58 days across Phases 0–5  
 **Summary:** File-by-file integration blueprint mapping the revised multi-user Phases 0–5 plan (41–58 days est.) onto AIMoveMaker's FastAPI, Redis/Celery, RBAC, SQLAlchemy, and React codebase.

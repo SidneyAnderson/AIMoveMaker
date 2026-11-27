@@ -14,6 +14,8 @@ End-to-end AI film production platform (local-first NLE). Storyboard + Canvas fo
 | ffmpeg     | 4.0+    | Yes (video/audio processing) |
 | Redis      | 7+      | Yes (task queue & real-time) |
 
+**Platform:** Linux. On Windows the application runs inside WSL 2 (Ubuntu 22.04) by design. `setup.sh` and `start.sh` are bash scripts, so run them from the WSL shell, with Python, Node.js, ffmpeg and Redis installed inside WSL.
+
 ### AI Pipeline Dependencies (installed automatically by setup.sh)
 
 These are the core AI packages that power image, video, audio, and interpolation:
@@ -36,7 +38,7 @@ These are the core AI packages that power image, video, audio, and interpolation
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/your-org/AIMoveMaker.git
+git clone https://github.com/SidneyAnderson/AIMoveMaker.git
 cd AIMoveMaker
 
 # 2. Run setup (creates venv, installs deps, runs migrations, seeds DB)
@@ -164,14 +166,14 @@ AIMoveMaker/
     config.py               # Pydantic settings (reads .env)
     main.py                 # App factory, lifespan, router registration
     models/                 # SQLAlchemy 2.0 async models (22 tables)
-    schemas/                # 75 Pydantic request/response schemas
+    schemas/                # 84 Pydantic request/response schemas
     celery_app.py           # Celery 5 configuration
     seed.py                 # Database seeder (admin + settings)
     hardware_profile.py     # GPU detection & optimization strategy
     logging_config.py       # Loguru sinks with rotation
     dependencies.py         # FastAPI dependencies (auth, DB session)
-    routers/                # 20 API router modules (51 endpoints)
-    services/               # 12 business logic services
+    routers/                # 24 API router modules (91 REST + 4 WebSocket endpoints)
+    services/               # 13 business logic services
     pipelines/              # AI generation pipelines
       image.py              #   T2I, I2I, Inpaint, Outpaint
       video.py              #   LTX-V, WAN 2.2 (T2V, I2V, V2V)
@@ -188,7 +190,9 @@ AIMoveMaker/
       components/           # AppShell, CommandPalette, UI primitives
       views/                # Login, Projects, Storyboard, Timeline, Admin, Settings
   PRD/                      # Product Requirements Document
+  phase0/                   # Owner-run RTX 5090 GPU test kit
   tests/                    # Phase verification test suites
+  AGENTS.md                 # Instructions for coding agents
   setup.sh                  # One-time bootstrap script
   start.sh                  # Launch all services
   .env.example              # Environment variable template
@@ -210,9 +214,9 @@ All environment variables are documented in `.env.example`. Infrastructure-only 
 
 ## API
 
-- **51 REST endpoints** across 20 groups, all under the `/api/` prefix
-- **3 WebSocket endpoints**: `/api/ws/jobs/{id}`, `/api/ws/projects/{id}`, `/api/ws/logs`
-- **75 Pydantic schemas** for request/response validation
+- **91 REST endpoints** across 23 router modules, all under the `/api/` prefix
+- **4 WebSocket endpoints**: `/api/ws/jobs/{id}`, `/api/ws/projects/{id}`, `/api/ws/notifications`, `/api/ws/logs`
+- **84 Pydantic schemas** for request/response validation
 - Interactive API docs at http://localhost:8000/docs
 - Built frontend is served via SPA catch-all (no separate web server needed in production)
 

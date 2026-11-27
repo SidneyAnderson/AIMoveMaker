@@ -249,10 +249,12 @@ def downgrade() -> None:
 - Use `diffusers>=0.40` or `sglang>=0.5.17`
 - Replace `backend/pipelines/video.py` with `RuntimeAdapter` classes
 
-### 4. Native Windows + Ubuntu, No Docker
+### 4. Ubuntu 22.04+ (WSL 2 on Windows Hosts), No Docker
 
-- Phase 5: `install.sh` (Ubuntu `redis-server`) + `install.ps1` (Windows Memurai)
-- No Docker, Docker Compose, or WSL Redis
+- A Windows host runs the app inside WSL 2 only (addendum INSTALL-03, amended November 27, 2026)
+- Phase 5: `scripts/install.sh` installs native `redis-server` inside Ubuntu
+- Do not build `install.ps1`, a Memurai setup, or any native Windows installer
+- No Docker or Docker Compose
 
 ### 5. Never Commit Secrets
 
@@ -480,7 +482,7 @@ task_queues={
 
 ### Phase 5: NLE Seam Finishing, Vast.ai VM Worker, Native Redis, Bernini venv (10–13d, estimate)
 
-**Goal:** Seam color grading, AnimeCadence, Vast.ai SSH worker, native Redis installers (no Docker).
+**Goal:** Seam color grading, AnimeCadence, Vast.ai SSH worker, native Redis installer for Ubuntu and WSL 2 (no Docker, no native Windows installer).
 
 **New Integrations:**
 - `backend/integrations/vastai_vm.py`
@@ -490,8 +492,7 @@ task_queues={
 - `generation_tasks.py`: add per-clip LUT (brightness/contrast/warmth), blur+zoom transitions
 
 **New Scripts:**
-- `scripts/install.sh` (Ubuntu: `apt install redis-server`, start systemd, create `.venvs/*`)
-- `scripts/install.ps1` (Windows: install Memurai, start service, create `.venvs/*`)
+- `scripts/install.sh` (Ubuntu, including WSL 2 on a Windows host: `apt install redis-server`, start the service, create `.venvs/*`, warn when the install root or a model root is under `/mnt/`)
 
 **Service Updates:**
 - `job_service.py`: Vast.ai dispatch logic, SSH/TLS remote worker, file sync
@@ -500,7 +501,7 @@ task_queues={
 - `TimelineView.tsx`: adjacent-clip A/B seam comparator, color/blur sliders
 - Apply `#081A24`/`#36A9E8`/`#2DD4BF` theme in `index.css`
 
-**Acceptance Check:** Clean Windows & Ubuntu installs start native Redis + Celery + FastAPI without Docker
+**Acceptance Check:** A clean Ubuntu install and a clean WSL 2 install on a Windows host each start native Redis + Celery + FastAPI without Docker
 
 ---
 

@@ -6,8 +6,8 @@
 - Windows 11 PC, RTX 5090 32 GB (sm_120)
 - Intel Core Ultra 9 285K
 - CUDA 12.8+
-- WSL Ubuntu-22.04 (optional, for Linux test path)
-- Model storage: `D:\AIModels\` (Windows) or `~/AIModels/` (WSL)
+- WSL 2 Ubuntu-22.04 (the target runtime: the app runs in WSL 2 only, so measure here)
+- Model storage: `~/AIModels/` on the WSL Linux filesystem. `D:\AIModels\` applies only to the native Windows comparison path
 
 **Output:** JSON results in `phase0/results/*.json` that the coding agent will read to populate `ModelRegistry.fits_target_vram` and other flags.
 
@@ -15,7 +15,9 @@
 
 ## Quick Start (Choose Your Platform)
 
-### Option A: Native Windows (PowerShell)
+> **Use Option B (WSL) for the results you commit.** The application runs in WSL 2 only (addendum INSTALL-03), so `phase0/results/*.json` must be measured there. Option A is for a side-by-side speed comparison. Both options write the same file names and the JSON does not record the operating system, so keep native Windows results out of `phase0/results/` when you commit.
+
+### Option A: Native Windows (PowerShell), comparison only
 
 ```powershell
 # 1. Create isolated Python environment
@@ -35,7 +37,7 @@ python env_check.py --model-root D:\AIModels
 .\run_all.ps1 -ModelRoot "D:\AIModels"
 ```
 
-### Option B: WSL Ubuntu-22.04
+### Option B: WSL Ubuntu-22.04 (target runtime)
 
 ```bash
 # 1. Create isolated Python environment
@@ -163,7 +165,7 @@ huggingface-cli login  # Paste your HF token (required for gated models)
 - [Lightricks/LTX-2.5](https://huggingface.co/Lightricks/LTX-2.5)
 - [Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients) and [Lightricks/LTX-2.5-22b-IC-LoRA-Restore](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Restore) (and the rest of the [Creative Lab](https://huggingface.co/collections/Lightricks/ltx-25-creative-lab) collection if you download more than the two representatives)
 
-### Windows (PowerShell) Downloads
+### Windows (PowerShell) Downloads, comparison only
 
 ```powershell
 # Video models
@@ -356,7 +358,7 @@ The coding agent will adapt the registry seed based on your actual results, so *
 
 ---
 
-**Start command (Windows):**
+**Start command (Windows, comparison only):**
 ```powershell
 cd phase0
 python -m venv .venv
@@ -367,7 +369,7 @@ python env_check.py --model-root D:\AIModels
 .\run_all.ps1 -ModelRoot "D:\AIModels"
 ```
 
-**Start command (WSL Ubuntu):**
+**Start command (WSL Ubuntu, target runtime):**
 ```bash
 cd phase0
 python3 -m venv .venv && source .venv/bin/activate

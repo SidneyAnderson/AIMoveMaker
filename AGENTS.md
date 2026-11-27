@@ -7,7 +7,9 @@
 
 ## Overview
 
-You are implementing the Movie Maker layers on top of the existing AI Movie Maker v1 application. This is a **multi-user, local-first AI film studio** running on Windows and Ubuntu with FastAPI backend, React frontend, Celery task queues, and Redis pub/sub.
+You are implementing the Movie Maker layers on top of the existing AI Movie Maker v1 application. This is a **multi-user, local-first AI film studio** running on Ubuntu 22.04+ (WSL 2 on Windows hosts) with FastAPI backend, React frontend, Celery task queues, and Redis pub/sub.
+
+**Runtime environment: WSL only.** The solution runs in WSL 2 (Ubuntu 22.04) on the owner's Windows 11 PC by design, and addendum v1.4 (INSTALL-03, amended November 27, 2026) makes WSL 2 the only Windows path. `setup.sh` and `start.sh` are bash scripts on purpose, so run them from the WSL shell. Do not build a native Windows installer, a PowerShell launcher, or a Memurai setup.
 
 **Your role:** Build the features specified in the PRD addendum v1.4 using the existing codebase as the framework. You will extend, not replace, the working v1 application.
 
@@ -48,7 +50,7 @@ Before writing any code, read these documents in this exact order:
 
 1. **Keep Redis + Celery + Multi-User**
    - Redis 7 pub/sub for WebSocket progress updates
-   - Celery 5 priority queues: `high`, `medium`, `default`, `low`, `gpu_h3`, `gpu_ltx`, `gpu_wan`, `gpu_audio`, `import_cpu`
+   - Celery 5 queues: keep the four v1 priority queues that `backend/celery_app.py` declares today (`high`, `medium`, `default`, `low`), and add the five engine queues in Phase 1 (`gpu_h3`, `gpu_ltx`, `gpu_wan`, `gpu_audio`, `import_cpu`)
    - JWT/OAuth authentication
    - DO NOT replace with single-user SQLite queues
 
@@ -80,8 +82,10 @@ Before writing any code, read these documents in this exact order:
    - ComfyUI-packed checkpoints are converted once at import, then run via Diffusers
    - See addendum A0.2 item 3
 
-5. **Native Installers (No Docker for Standard Deploy)**
-   - **Redis:** `redis-server` on Ubuntu, Memurai or native Redis build on Windows
+5. **Ubuntu / WSL 2 Only (No Docker for Standard Deploy)**
+   - **Platform:** Ubuntu 22.04+. A Windows host runs the app inside WSL 2 only (addendum INSTALL-03)
+   - **Redis:** native `redis-server` inside Ubuntu
+   - DO NOT build a native Windows installer, `scripts/install.ps1`, or a Memurai setup
    - DO NOT require Docker for standard deployment (v1 Section 3.4 and addendum SECRET-05)
    - Docker is explicitly forbidden for Redis installers
 
@@ -157,7 +161,7 @@ These repos returned `gated: auto` from the Hugging Face API on 2026-11-27. Ever
 ## Repository Structure
 
 ```
-/workspace/
+AIMoveMaker/                       # Repo root (the PRD guides write this as /workspace)
 ├── backend/
 │   ├── main.py                    # FastAPI app + lifespan + router mounting
 │   ├── config.py                  # Settings (Pydantic BaseSettings)
@@ -180,7 +184,8 @@ These repos returned `gated: auto` from the Hugging Face API on 2026-11-27. Ever
 │   │   └── ...
 │   ├── pipelines/                 # Generation pipelines
 │   ├── migrations/                # Alembic migrations
-│   └── integrations/              # External API clients (Civitai, HF)
+│   ├── tests/                     # pytest suite (unit/, integration/)
+│   └── integrations/              # External API clients (empty package in v1)
 ├── frontend/src/
 │   ├── App.tsx                    # Main app + AppShell + routing
 │   ├── stores/                    # Zustand stores
@@ -191,7 +196,7 @@ These repos returned `gated: auto` from the Hugging Face API on 2026-11-27. Ever
 │   └── views/                     # Page-level views
 │       ├── ProjectsView.tsx
 │       └── ...
-├── tests/                         # Existing tests
+├── tests/                         # v1 phase verification scripts (run with python)
 ├── PRD/                           # All documentation
 │   ├── README.md
 │   ├── addendum/
@@ -217,6 +222,7 @@ These repos returned `gated: auto` from the Hugging Face API on 2026-11-27. Ever
 **YOU DO NOT HAVE A GPU.** Phase 0 GPU measurements (VRAM fit checks, model loading, benchmark) are run by the repository owner (Sidney) on his local machine:
 
 - **Hardware:** Windows 11 PC, RTX 5090 32 GB (sm_120), Intel Core Ultra 9 285K, CUDA 12.8+
+- **Runtime for measurements:** WSL 2 Ubuntu 22.04 (`phase0/run_all.sh`), because that is where the app runs
 - **Test kit:** `phase0/` directory (see `phase0/README.md` for instructions)
 - **Results location:** `phase0/results/*.json`
 
@@ -288,19 +294,23 @@ alembic upgrade head
 Run existing tests to verify you haven't broken v1:
 
 ```bash
-# Backend tests
-cd backend
-pytest tests/ -v
+# Backend tests: run from the repo root (pyproject.toml sets testpaths to backend/tests)
+python -m pytest backend/tests -v
 
-# Frontend tests (if present)
+# v1 phase verification scripts: they call sys.exit(), so run them with python, not pytest
+python tests/test_phase5.py
+python tests/test_phase6.py
+python tests/test_phase2_compliance.py   # needs the API running at http://localhost:8000
+
+# Frontend: there is no "npm test" script, so the type check and build are the gate
 cd frontend
-npm test
+npm run build
 ```
 
 **Write tests for new features:**
-- Unit tests: `tests/unit/test_<feature>.py`
-- Integration tests: `tests/integration/test_<workflow>.py`
-- End-to-end: Use existing test patterns (look at `tests/` for examples)
+- Unit tests: `backend/tests/unit/` (existing subfolders are `test_services/` and `test_pipelines/`)
+- Integration tests: `backend/tests/integration/` (router tests go in `test_routers/`)
+- End-to-end: Use existing test patterns (fixtures are in `backend/tests/conftest.py`)
 
 **Acceptance criteria:** Every addendum feature section lists GIVEN/WHEN/THEN criteria. Write tests that verify these.
 
@@ -338,14 +348,15 @@ app.include_router(models.router)
 ```python
 # backend/tasks/generation_tasks.py
 from backend.celery_app import celery_app
-from backend.database import async_session
 
 @celery_app.task(name="generation.render_h3", queue="gpu_h3")
 def render_h3_task(job_id: str):
-    # Use sync DB session in Celery tasks
-    with async_session() as db:
-        # ... task logic
-        redis_client.publish(f"job:{job_id}", json.dumps({"progress": 50}))
+    # Celery tasks are synchronous. Reuse the v1 helpers already in this file:
+    # _update_job_status() opens a sync SQLAlchemy Session, and
+    # _publish_progress() publishes to the Redis channel job:{job_id}.
+    _update_job_status(job_id, "running")
+    # ... task logic
+    _publish_progress(job_id, progress_pct=50, current_step=11, total_steps=22)
 ```
 
 ### 3. Adding a SQLAlchemy Model
@@ -481,7 +492,7 @@ If you encounter:
 2. Existing v1 tests still pass (no regressions)
 3. Phase 0 results (when available) are correctly consumed
 4. No secrets in git or logs
-5. The app still runs on Windows + Ubuntu without Docker (except optional Vast.ai burst)
+5. The app still runs on Ubuntu 22.04+, including WSL 2 on a Windows host, without Docker (except optional Vast.ai burst)
 6. The 4 personas and role-gated state machine still work
 7. Projects are locked to one core video model at creation
 
