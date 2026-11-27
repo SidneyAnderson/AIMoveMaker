@@ -25,7 +25,7 @@ python -m venv .venv
 
 # 2. Install dependencies
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
-pip install diffusers>=0.43 transformers accelerate safetensors omegaconf
+pip install "diffusers>=0.43" transformers accelerate safetensors omegaconf
 pip install redis psutil
 
 # 3. Check environment
@@ -45,7 +45,7 @@ source .venv/bin/activate
 
 # 2. Install dependencies
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
-pip install diffusers>=0.43 transformers accelerate safetensors omegaconf
+pip install "diffusers>=0.43" transformers accelerate safetensors omegaconf
 pip install redis psutil
 
 # 3. Check environment
@@ -80,32 +80,34 @@ python env_check.py --model-root ~/AIModels
    - Precision: FP8 (torchao) or NVFP4 (ModelOpt) if `sm_120` supports; else BF16
 
 2. **LTX-2.5** (`ltx_2_5`)
-   - Hugging Face: `Lightricks/LTX-Video-2.5` (or the official LTX-2.5 path)
+   - Hugging Face: `Lightricks/LTX-2.5` (gated: requires license acceptance)
    - Test: Load via `LTX2Pipeline` or `LTX25AutoBlocks`, render 24-frame 768×512 clip
    - Precision: FP8 or BF16
 
 3. **Wan 2.2 + Wan Animate 2** (`wan_bernini`)
-   - Hugging Face: TBD (Wan 2.2 official path; Wan Animate 2 via `WanAnimate2Pipeline`)
+   - Hugging Face: `Wan-AI/Wan2.2-I2V-A14B` (image-to-video, 14B) + `Wan-AI/Wan2.2-Animate-14B` (video-to-video, Wan Animate 2)
    - Test: Load, render 16-frame 512×512 clip
    - Precision: BF16 or FP8
+   - License: Apache-2.0 (not gated)
 
 ### Image Models (4 shipped defaults)
 
 4. **Krea 2 Turbo** (`krea_2_turbo`)
-   - Hugging Face: `krea/Krea-2-Turbo` (gated; needs HF token)
+   - Hugging Face: `krea/Krea-2-Turbo` (gated: requires license acceptance)
    - Test: Load via `Krea2Pipeline`, render 1024×1024 still (8 steps, CFG off)
+   - Also: `krea/Krea-2-Raw` (gated: for LoRA training)
 
 5. **Z-Image-Turbo** (`z_image_turbo`)
-   - Hugging Face: `Tongyi-MAI/Z-Image-Turbo`
+   - Hugging Face: `Tongyi-MAI/Z-Image-Turbo` (not gated, Apache-2.0)
    - Test: Load via `ZImagePipeline`, render 1024×1024 still (9 steps)
 
 6. **FLUX 3 Image Klein** (`flux_3_image_klein`)
-   - Hugging Face: `black-forest-labs/flux-3-image-klein`
+   - Hugging Face: `black-forest-labs/flux-3-image-klein` (gated: requires license acceptance)
    - Test: Load via `Flux3DistilledModularPipeline`, render 1024×1024 still (16 steps)
    - **Also test:** With 9B prompt upsampler offloaded (measure separately)
 
 7. **MiniMax-H3-Image** (`minimax_h3_image`)
-   - Hugging Face: `MiniMaxAI/MiniMax-H3-Image`
+   - Hugging Face: `MiniMaxAI/MiniMax-H3-Image` (not gated, MiniMax-H3-Image Community License)
    - Test: Load via `MiniMaxH3ImageModularPipeline`, render 16:9 still (try 1920×1080 first)
    - **Gate:** Official BF16 + full text encoder won't fit; test community quantization if available
 
@@ -115,23 +117,47 @@ python env_check.py --model-root ~/AIModels
 
 **All models require Hugging Face CLI:**
 ```bash
-pip install huggingface-hub
-huggingface-cli login  # Paste your HF token (required for gated Krea 2 Raw)
+pip install "huggingface-hub[cli]"
+huggingface-cli login  # Paste your HF token (required for gated models)
 ```
 
-**Video models:**
-```bash
+**Accept licenses for gated models** (visit these URLs and click "Accept"):
+- `krea/Krea-2-Turbo` and `krea/Krea-2-Raw`: https://huggingface.co/krea/Krea-2-Turbo
+- `black-forest-labs/flux-3-image-klein`: https://huggingface.co/black-forest-labs/flux-3-image-klein
+- `Lightricks/LTX-2.5`: https://huggingface.co/Lightricks/LTX-2.5
+
+### Windows (PowerShell) Downloads
+
+```powershell
+# Video models
 huggingface-cli download MiniMaxAI/MiniMax-H3 --local-dir D:\AIModels\MiniMax-H3
-huggingface-cli download Lightricks/LTX-Video-2.5 --local-dir D:\AIModels\LTX-2.5
-# Wan 2.2 path TBD
-```
+huggingface-cli download Lightricks/LTX-2.5 --local-dir D:\AIModels\LTX-2.5
+huggingface-cli download Wan-AI/Wan2.2-I2V-A14B --local-dir D:\AIModels\Wan2.2-I2V-A14B
+huggingface-cli download Wan-AI/Wan2.2-Animate-14B --local-dir D:\AIModels\Wan2.2-Animate-14B
 
-**Image models:**
-```bash
+# Image models
 huggingface-cli download krea/Krea-2-Turbo --local-dir D:\AIModels\Krea-2-Turbo
+huggingface-cli download krea/Krea-2-Raw --local-dir D:\AIModels\Krea-2-Raw
 huggingface-cli download Tongyi-MAI/Z-Image-Turbo --local-dir D:\AIModels\Z-Image-Turbo
 huggingface-cli download black-forest-labs/flux-3-image-klein --local-dir D:\AIModels\flux-3-image-klein
 huggingface-cli download MiniMaxAI/MiniMax-H3-Image --local-dir D:\AIModels\MiniMax-H3-Image
+```
+
+### WSL Ubuntu Downloads
+
+```bash
+# Video models
+huggingface-cli download MiniMaxAI/MiniMax-H3 --local-dir ~/AIModels/MiniMax-H3
+huggingface-cli download Lightricks/LTX-2.5 --local-dir ~/AIModels/LTX-2.5
+huggingface-cli download Wan-AI/Wan2.2-I2V-A14B --local-dir ~/AIModels/Wan2.2-I2V-A14B
+huggingface-cli download Wan-AI/Wan2.2-Animate-14B --local-dir ~/AIModels/Wan2.2-Animate-14B
+
+# Image models
+huggingface-cli download krea/Krea-2-Turbo --local-dir ~/AIModels/Krea-2-Turbo
+huggingface-cli download krea/Krea-2-Raw --local-dir ~/AIModels/Krea-2-Raw
+huggingface-cli download Tongyi-MAI/Z-Image-Turbo --local-dir ~/AIModels/Z-Image-Turbo
+huggingface-cli download black-forest-labs/flux-3-image-klein --local-dir ~/AIModels/flux-3-image-klein
+huggingface-cli download MiniMaxAI/MiniMax-H3-Image --local-dir ~/AIModels/MiniMax-H3-Image
 ```
 
 **Note:** `vram_fit.py --download` will attempt downloads if `--model-root` is set and weights are missing.
@@ -258,7 +284,7 @@ cd phase0
 python -m venv .venv
 .\.venv\Scripts\Activate.ps1
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
-pip install diffusers>=0.43 transformers accelerate safetensors redis psutil
+pip install "diffusers>=0.43" transformers accelerate safetensors redis psutil
 python env_check.py --model-root D:\AIModels
 .\run_all.ps1 -ModelRoot "D:\AIModels"
 ```
@@ -268,7 +294,7 @@ python env_check.py --model-root D:\AIModels
 cd phase0
 python3 -m venv .venv && source .venv/bin/activate
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
-pip install diffusers>=0.43 transformers accelerate safetensors redis psutil
+pip install "diffusers>=0.43" transformers accelerate safetensors redis psutil
 python env_check.py --model-root ~/AIModels
 ./run_all.sh --model-root ~/AIModels
 ```

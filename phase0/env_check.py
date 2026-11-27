@@ -93,7 +93,7 @@ def check_diffusers():
         else:
             print(f"⚠️  WARNING: Diffusers {diffusers.__version__} < 0.43.0")
             print("   Image model pipelines may be missing")
-            print("   Upgrade: pip install diffusers>=0.43")
+            print('   Upgrade: pip install "diffusers>=0.43"')
         
         # Check transformers
         import transformers
@@ -106,7 +106,7 @@ def check_diffusers():
         print("✅ Core AI libraries installed")
     except ImportError as e:
         print(f"❌ Missing library: {e}")
-        print("   Install: pip install diffusers>=0.43 transformers accelerate")
+        print('   Install: pip install "diffusers>=0.43" transformers accelerate')
         return False
     print()
     return True
@@ -188,7 +188,7 @@ def check_sglang():
     except ImportError:
         print("⚠️  SGLang not installed (optional)")
         print("   Video tests will use Diffusers pipelines")
-        print("   Install: pip install sglang>=0.5.17")
+        print('   Install: pip install "sglang>=0.5.17"')
     print()
 
 def main():
