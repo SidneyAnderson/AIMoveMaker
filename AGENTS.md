@@ -59,7 +59,7 @@ Before writing any code, read these documents in this exact order:
    - DO NOT add a `solo_creator` bypass
 
 3. **One Core Video Model Per Project (Immutable)**
-   - Each project locks ONE core video model at creation: [`minimax_h3`](https://huggingface.co/MiniMaxAI/MiniMax-H3), [`ltx_2_5`](https://huggingface.co/Lightricks/LTX-2.5), or [`wan_bernini`](https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B)
+   - Each project locks ONE core video model at creation: [`minimax_h3`](https://huggingface.co/MiniMaxAI/MiniMax-H3), [`ltx_2_5`](https://huggingface.co/Lightricks/LTX-2.5), or [`wan_bernini`](https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B) (with [Bernini-R](https://huggingface.co/ByteDance/Bernini-R-Diffusers) editing/reference support)
    - This choice is immutable in place
    - Migration requires cloning into a new project
    - DO NOT allow switching a project's core model (PROFILE-03)
@@ -376,7 +376,7 @@ Seed the first-party model pack on startup or migration:
 VIDEO_MODELS = [
     {"machine_key": "minimax_h3", "name": "MiniMax H3", "type": "video", "hf_repo": "MiniMaxAI/MiniMax-H3", ...},
     {"machine_key": "ltx_2_5", "name": "LTX-2.5", "type": "video", "hf_repo": "Lightricks/LTX-2.5", ...},
-    {"machine_key": "wan_bernini", "name": "Wan 2.2", "type": "video", "hf_repo": "Wan-AI/Wan2.2-I2V-A14B", ...},
+    {"machine_key": "wan_bernini", "name": "Wan 2.2 + Bernini-R", "type": "video", "hf_repo": "Wan-AI/Wan2.2-I2V-A14B", "bernini_hf_repo": "ByteDance/Bernini-R-Diffusers", ...},
 ]
 
 IMAGE_MODELS = [
@@ -387,10 +387,14 @@ IMAGE_MODELS = [
 ]
 
 # Full model links:
+# VIDEO MODELS:
 # - MiniMax H3: https://huggingface.co/MiniMaxAI/MiniMax-H3
 # - LTX-2.5: https://huggingface.co/Lightricks/LTX-2.5 (gated)
 # - Wan 2.2 I2V: https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B
+# - Wan 2.2 T2V: https://huggingface.co/Wan-AI/Wan2.2-T2V-A14B-Diffusers
 # - Wan Animate 2: https://huggingface.co/Wan-AI/Wan2.2-Animate-14B
+# - Bernini-R (wan_bernini editing/reference): https://huggingface.co/ByteDance/Bernini-R-Diffusers (requires ByteDance inference code)
+# IMAGE MODELS:
 # - Krea 2 Turbo: https://huggingface.co/krea/Krea-2-Turbo (gated)
 # - Krea 2 Raw: https://huggingface.co/krea/Krea-2-Raw (gated, for LoRA training)
 # - Z-Image-Turbo: https://huggingface.co/Tongyi-MAI/Z-Image-Turbo

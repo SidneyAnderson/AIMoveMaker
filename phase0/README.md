@@ -79,6 +79,7 @@ Quick reference to all Hugging Face model pages:
 | **LTX-2.5** | [Lightricks/LTX-2.5](https://huggingface.co/Lightricks/LTX-2.5) | Yes | other (requires acceptance) |
 | **Wan 2.2 I2V** | [Wan-AI/Wan2.2-I2V-A14B](https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B) | No | Apache-2.0 |
 | **Wan Animate 2** | [Wan-AI/Wan2.2-Animate-14B](https://huggingface.co/Wan-AI/Wan2.2-Animate-14B) | No | Apache-2.0 |
+| **Bernini-R** | [ByteDance/Bernini-R-Diffusers](https://huggingface.co/ByteDance/Bernini-R-Diffusers) | No | Apache-2.0 |
 | **Krea 2 Turbo** | [krea/Krea-2-Turbo](https://huggingface.co/krea/Krea-2-Turbo) | Yes | Krea 2 Community License |
 | **Krea 2 Raw** | [krea/Krea-2-Raw](https://huggingface.co/krea/Krea-2-Raw) | Yes | Krea 2 Community License |
 | **Z-Image-Turbo** | [Tongyi-MAI/Z-Image-Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) | No | Apache-2.0 |
@@ -102,9 +103,9 @@ Quick reference to all Hugging Face model pages:
    - Test: Load via `LTX2Pipeline` or `LTX25AutoBlocks`, render 24-frame 768×512 clip
    - Precision: FP8 or BF16
 
-3. **Wan 2.2 + Wan Animate 2** (`wan_bernini`)
-   - Hugging Face: [`Wan-AI/Wan2.2-I2V-A14B`](https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B) (image-to-video, 14B) + [`Wan-AI/Wan2.2-Animate-14B`](https://huggingface.co/Wan-AI/Wan2.2-Animate-14B) (video-to-video, Wan Animate 2)
-   - Test: Load, render 16-frame 512×512 clip
+3. **Wan 2.2 + Wan Animate 2 + Bernini-R** (`wan_bernini`)
+   - Hugging Face: [`Wan-AI/Wan2.2-I2V-A14B`](https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B) (image-to-video, 14B), [`Wan-AI/Wan2.2-T2V-A14B-Diffusers`](https://huggingface.co/Wan-AI/Wan2.2-T2V-A14B-Diffusers) (text-to-video), [`Wan-AI/Wan2.2-Animate-14B`](https://huggingface.co/Wan-AI/Wan2.2-Animate-14B) (video-to-video, Wan Animate 2), [`ByteDance/Bernini-R-Diffusers`](https://huggingface.co/ByteDance/Bernini-R-Diffusers) (editing/reference, r2v/rv2v)
+   - Test: Load base Wan, render 16-frame 512×512 clip; Bernini-R requires ByteDance inference code (not stock Diffusers pipeline class)
    - Precision: BF16 or FP8
    - License: Apache-2.0 (not gated)
 
@@ -151,7 +152,9 @@ huggingface-cli login  # Paste your HF token (required for gated models)
 huggingface-cli download MiniMaxAI/MiniMax-H3 --local-dir D:\AIModels\MiniMax-H3
 huggingface-cli download Lightricks/LTX-2.5 --local-dir D:\AIModels\LTX-2.5
 huggingface-cli download Wan-AI/Wan2.2-I2V-A14B --local-dir D:\AIModels\Wan2.2-I2V-A14B
+huggingface-cli download Wan-AI/Wan2.2-T2V-A14B-Diffusers --local-dir D:\AIModels\Wan2.2-T2V-A14B-Diffusers
 huggingface-cli download Wan-AI/Wan2.2-Animate-14B --local-dir D:\AIModels\Wan2.2-Animate-14B
+huggingface-cli download ByteDance/Bernini-R-Diffusers --local-dir D:\AIModels\Bernini-R-Diffusers
 
 # Image models
 huggingface-cli download krea/Krea-2-Turbo --local-dir D:\AIModels\Krea-2-Turbo
@@ -168,7 +171,9 @@ huggingface-cli download MiniMaxAI/MiniMax-H3-Image --local-dir D:\AIModels\Mini
 huggingface-cli download MiniMaxAI/MiniMax-H3 --local-dir ~/AIModels/MiniMax-H3
 huggingface-cli download Lightricks/LTX-2.5 --local-dir ~/AIModels/LTX-2.5
 huggingface-cli download Wan-AI/Wan2.2-I2V-A14B --local-dir ~/AIModels/Wan2.2-I2V-A14B
+huggingface-cli download Wan-AI/Wan2.2-T2V-A14B-Diffusers --local-dir ~/AIModels/Wan2.2-T2V-A14B-Diffusers
 huggingface-cli download Wan-AI/Wan2.2-Animate-14B --local-dir ~/AIModels/Wan2.2-Animate-14B
+huggingface-cli download ByteDance/Bernini-R-Diffusers --local-dir ~/AIModels/Bernini-R-Diffusers
 
 # Image models
 huggingface-cli download krea/Krea-2-Turbo --local-dir ~/AIModels/Krea-2-Turbo

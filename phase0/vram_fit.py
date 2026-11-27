@@ -275,6 +275,30 @@ def test_video_model_ltx(model_root: Path) -> Dict[str, Any]:
 def test_video_model_wan(model_root: Path) -> Dict[str, Any]:
     return {"model_key": "wan_bernini", "status": "not_implemented", "vram_fit": False, "errors": ["Test TBD"]}
 
+def test_video_model_bernini_r(model_root: Path) -> Dict[str, Any]:
+    """Test Bernini-R video editing/reference model."""
+    model_key = "bernini_r"
+    model_path = model_root / "Bernini-R-Diffusers"
+    
+    if not model_path.exists():
+        print(f"⚠️  Weights not found: {model_path}")
+        return {
+            "model_key": model_key,
+            "status": "missing_weights",
+            "vram_fit": False,
+            "errors": [f"Weights not found at {model_path}"],
+            "notes": "Requires ByteDance inference code (not stock Diffusers pipeline class)"
+        }
+    
+    # TBD: Implement Bernini-R test with ByteDance inference code
+    return {
+        "model_key": model_key,
+        "status": "not_implemented",
+        "vram_fit": False,
+        "errors": ["Test TBD - requires ByteDance custom inference code"],
+        "notes": "Bernini-R editing/reference support for wan_bernini profile. Loads from ByteDance/Bernini-R-Diffusers."
+    }
+
 def test_image_model_flux3(model_root: Path) -> Dict[str, Any]:
     return {"model_key": "flux_3_image_klein", "status": "not_implemented", "vram_fit": False, "errors": ["Test TBD"]}
 
@@ -286,6 +310,7 @@ MODEL_TESTS = {
     "minimax_h3": test_video_model_h3,
     "ltx_2_5": test_video_model_ltx,
     "wan_bernini": test_video_model_wan,
+    "bernini_r": test_video_model_bernini_r,
     "krea_2_turbo": test_image_model_krea2,
     "z_image_turbo": test_image_model_zimage,
     "flux_3_image_klein": test_image_model_flux3,

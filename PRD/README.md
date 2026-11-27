@@ -20,13 +20,13 @@ Word format version of the baseline PRD v1.0.
 
 ---
 
-## Movie Maker Addendum (v1.2)
+## Movie Maker Addendum
 
-### **addendum/AIMoveMaker_PRD_Addendum_MovieMaker_v1.3.md**
-**Version:** 1.3 — Addendum to PRD v1.0  
-**Status:** Specification for the v1.3 build — not yet implemented  
-**Date:** November 26, 2026  
-**Changelog:** v1.3 adds Section A18 keyframe image-model defaults: shipped T2I default Krea 2 Turbo (`krea_2_turbo`), automatic fallback Z-Image-Turbo (`z_image_turbo`), shipped edit/consistency default FLUX 3 Image Klein (`flux_3_image_klein`), MiniMax-H3-Image becomes H3-profile default only after license authorization + 32GB VRAM fit gates; per-profile `default_image_model_key` / `default_image_edit_model_key`; Import Model applies to image models. v1.2 moves LTX core to LTX-2.5, pins Diffusers ≥ 0.40, adds Wan Animate 2 pipeline support.
+### **addendum/AIMoveMaker_PRD_Addendum_MovieMaker_v1.4.md**
+**Version:** 1.4 — Addendum to PRD v1.0  
+**Status:** Specification for the v1.4 build — not yet implemented  
+**Date:** November 27, 2026  
+**Changelog:** v1.4 adds [Bernini-R](https://huggingface.co/ByteDance/Bernini-R-Diffusers) editing and reference-to-video as supported `wan_bernini` capability (gated by Phase 0 VRAM fit + ByteDance inference code verification). Supports t2v, i2v, v2v, r2v, rv2v. Bernini-R-S2V (speech) remains out of scope (ComfyUI-only). v1.3 adds Section A18 keyframe image-model defaults: shipped T2I default Krea 2 Turbo (`krea_2_turbo`), automatic fallback Z-Image-Turbo (`z_image_turbo`), shipped edit/consistency default FLUX 3 Image Klein (`flux_3_image_klein`), MiniMax-H3-Image becomes H3-profile default only after license authorization + 32GB VRAM fit gates; per-profile `default_image_model_key` / `default_image_edit_model_key`; Import Model applies to image models. v1.2 moves LTX core to LTX-2.5, pins Diffusers ≥ 0.40, adds Wan Animate 2 pipeline support.
 
 The build-contract addendum extending AI Movie Maker v1 with the Movie Maker layers: MiniMax H3 runtime-agnostic engine, Import Model converter pipeline with safety gates, project-level core model lock, multi-user model library, Seed Hunter v3 workflow (6-field structured prompts, RefMods, 3-seed Stage-1 previews, 3D latent upscale Stage-2, dialogue cloner, 17n+5 seamless continuation), keyframe image model defaults (Krea 2 Turbo, FLUX 3 Image Klein, MiniMax-H3-Image with gates), LTX-2.5 & Wan Animate 2 support, NLE seam finishing tools, and native Redis installers (Ubuntu/Windows without Docker).
 
@@ -41,8 +41,8 @@ The build-contract addendum extending AI Movie Maker v1 with the Movie Maker lay
 - Celery per-engine GPU queue routing (`.venvs/h3`, `.venvs/ltx`, `.venvs/audio`)
 - Effort estimate: 41–58 days across Phases 0–5
 
-### **addendum/AIMoveMaker_PRD_Addendum_MovieMaker_v1.3.docx**
-Word format version of the v1.3 addendum.
+### **addendum/AIMoveMaker_PRD_Addendum_MovieMaker_v1.4.docx**
+Word format version of the v1.4 addendum.
 
 ---
 
@@ -130,6 +130,12 @@ Previous version of the Movie Maker addendum. Retained for historical reference 
 **Date:** November 26, 2026  
 
 Previous version (superseded by v1.3). Retained for historical reference and change tracking.
+
+### **history/AIMoveMaker_PRD_Addendum_MovieMaker_v1.3.md**
+**Version:** 1.3 — Addendum to PRD v1.0  
+**Date:** November 26, 2026  
+
+Previous version (superseded by v1.4). Retained for historical reference and change tracking.
 
 ---
 
