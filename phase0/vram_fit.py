@@ -269,17 +269,29 @@ def test_image_model_zimage(model_root: Path) -> Dict[str, Any]:
 
 
 # Stub tests for remaining models
-def test_video_model_ltx(model_root: Path) -> Dict[str, Any]:
-    return {"model_key": "ltx_2_5", "status": "not_implemented", "vram_fit": False, "errors": ["Test TBD"]}
+def test_video_model_ltx(model_root: Path, precision: str = "bf16") -> Dict[str, Any]:
+    return {"model_key": "ltx_2_5", "status": "not_implemented", "vram_fit": False, "precision": precision, "errors": ["Test TBD"]}
 
-def test_video_model_wan(model_root: Path) -> Dict[str, Any]:
-    return {"model_key": "wan_bernini", "status": "not_implemented", "vram_fit": False, "errors": ["Test TBD"]}
+def test_video_model_wan(model_root: Path, precision: str = "bf16") -> Dict[str, Any]:
+    return {"model_key": "wan_bernini", "status": "not_implemented", "vram_fit": False, "precision": precision, "errors": ["Test TBD"]}
 
 def test_video_model_bernini_r(model_root: Path) -> Dict[str, Any]:
-    """Test Bernini-R video editing/reference model."""
+    """Gate for Bernini-R, the internal Wan edit/consistency route.
+
+    Skips when weights are absent. Does not claim a stock Diffusers load:
+    the repo has no model_index.json. Upstream pins diffusers==0.35.2, so a
+    pass is only meaningful inside .venvs/bernini.
+    """
     model_key = "bernini_r"
     model_path = model_root / "Bernini-R-Diffusers"
-    
+    notes = (
+        "Internal route for edit_shot and keep_consistent on wan_bernini. "
+        "ByteDance inference code, not a stock Diffusers pipeline class. "
+        "Run this entry in .venvs/bernini (diffusers==0.35.2). "
+        "Do not downgrade the application environment. "
+        "Bernini-R-S2V is out of scope."
+    )
+
     if not model_path.exists():
         print(f"⚠️  Weights not found: {model_path}")
         return {
@@ -287,17 +299,240 @@ def test_video_model_bernini_r(model_root: Path) -> Dict[str, Any]:
             "status": "missing_weights",
             "vram_fit": False,
             "errors": [f"Weights not found at {model_path}"],
-            "notes": "Requires ByteDance inference code (not stock Diffusers pipeline class)"
+            "notes": notes,
         }
-    
-    # TBD: Implement Bernini-R test with ByteDance inference code
+
+    try:
+        import importlib.metadata
+        diffusers_version = importlib.metadata.version("diffusers")
+    except Exception as exc:
+        diffusers_version = f"unknown ({exc})"
+
+    if diffusers_version != "0.35.2":
+        print(f"⚠️  diffusers {diffusers_version} is not the Bernini pin 0.35.2")
+        return {
+            "model_key": model_key,
+            "status": "pipeline_unavailable",
+            "vram_fit": False,
+            "errors": [
+                f"This process has diffusers {diffusers_version}. "
+                "Bernini-R upstream pins diffusers==0.35.2. "
+                "Re-run inside .venvs/bernini."
+            ],
+            "notes": notes,
+        }
+
+    print("⚠️  Pin matches, but this kit does not call ByteDance's inference script")
     return {
         "model_key": model_key,
         "status": "not_implemented",
         "vram_fit": False,
-        "errors": ["Test TBD - requires ByteDance custom inference code"],
-        "notes": "Bernini-R editing/reference support for wan_bernini profile. Loads from ByteDance/Bernini-R-Diffusers."
+        "errors": [
+            "diffusers==0.35.2 is active and weights are present, "
+            "but ByteDance's inference entrypoint is not bundled here. "
+            "Record a manual load with their inference script in this venv."
+        ],
+        "notes": notes,
     }
+
+
+def test_h3_ref2va(model_root: Path, precision: str = "bf16") -> Dict[str, Any]:
+    """Gate for MiniMax H3 Ref2VA (continue, edit, consistency). Not a UI mode.
+
+    Ref2VA is the transformer_ref partition of MiniMax-H3, not a separate repo.
+    A pass requires a Diffusers class that can load that partition. This function
+    does not start SGLang. If only the weights exist, the result is
+    pipeline_unavailable and the product uses the Section A19 fallback.
+    """
+    model_key = "h3_ref2va"
+    model_path = model_root / "MiniMax-H3"
+    notes = (
+        "Internal route for continue_shot, edit_shot, and keep_consistent on minimax_h3. "
+        "Own SGLang service with --model-variant ref2va, or a Diffusers ModularPipeline "
+        "over transformer_ref. Open release excludes Context-IR and Regenerate-2K. "
+        "Failure selects the Section A19 fallback; it does not remove the core operation."
+    )
+    if not model_path.exists():
+        print(f"⚠️  Weights not found: {model_path}")
+        return {
+            "model_key": model_key,
+            "status": "missing_weights",
+            "vram_fit": False,
+            "errors": [f"Weights not found at {model_path}"],
+            "notes": notes,
+        }
+
+    ref_dir = next(
+        (candidate for candidate in (
+            model_path / "transformer_ref",
+            model_path / "transformer_ref2va",
+        ) if candidate.exists()),
+        None,
+    )
+    if ref_dir is None:
+        print("⚠️  Ref2VA partition not found")
+        return {
+            "model_key": model_key,
+            "status": "missing_weights",
+            "vram_fit": False,
+            "errors": ["transformer_ref (or transformer_ref2va) not found under MiniMax-H3"],
+            "notes": notes,
+        }
+
+    try:
+        import diffusers
+    except Exception as exc:
+        return {
+            "model_key": model_key,
+            "status": "pipeline_unavailable",
+            "vram_fit": False,
+            "errors": [f"diffusers import failed: {exc}"],
+            "notes": notes,
+        }
+
+    ref_class = None
+    for class_name in (
+        "MiniMaxH3RefPipeline",
+        "MiniMaxH3VideoModularPipeline",
+        "MiniMaxH3ModularPipeline",
+    ):
+        candidate = getattr(diffusers, class_name, None)
+        if candidate is not None:
+            ref_class = candidate
+            break
+
+    if ref_class is None:
+        print("⚠️  No Diffusers Ref2VA class in this build")
+        return {
+            "model_key": model_key,
+            "status": "pipeline_unavailable",
+            "vram_fit": False,
+            "precision": precision,
+            "errors": [
+                "Weights include a ref partition, but this diffusers build has no "
+                "MiniMax Ref2VA / H3 video pipeline class. "
+                "Either load transformer_ref with a documented ModularPipeline, "
+                "or run SGLang in the H3 venv with --model-variant ref2va and "
+                "record peak VRAM. Do not mark this gate pass from FL2VA."
+            ],
+            "notes": notes,
+        }
+
+    try:
+        import time
+        print(f"Loading {ref_class.__name__} from {model_path}...")
+        start = time.time()
+        ref_class.from_pretrained(str(model_path), torch_dtype=torch.bfloat16)
+        load_time = time.time() - start
+        peak = torch.cuda.max_memory_allocated() / 1e9 if torch.cuda.is_available() else None
+        vram_fit = bool(peak is not None and peak < VRAM_THRESHOLD_GB)
+        return {
+            "model_key": model_key,
+            "status": "pass" if vram_fit else "fail_vram",
+            "vram_fit": vram_fit,
+            "peak_vram_gb": None if peak is None else round(peak, 2),
+            "load_time_sec": round(load_time, 1),
+            "precision": precision,
+            "errors": [],
+            "notes": notes + " Load-only; a ref2va render was not run.",
+        }
+    except Exception as exc:
+        print(f"⚠️  Ref2VA load failed: {exc}")
+        return {
+            "model_key": model_key,
+            "status": "pipeline_unavailable",
+            "vram_fit": False,
+            "precision": precision,
+            "errors": [f"{type(exc).__name__}: {exc}"],
+            "notes": notes,
+        }
+
+
+def test_ltx_ic_lora(model_root: Path, precision: str = "bf16") -> Dict[str, Any]:
+    """Diffusers load check for two representative LTX-2.5 Creative Lab IC-LoRAs.
+
+    Ingredients (keep_consistent) and Restore (restore_refine). Both repos are
+    HF-gated. Lightricks documents a ComfyUI path; this check does not call
+    ComfyUI. Missing weights skip. A failed Diffusers load is
+    pipeline_unavailable, which selects the Section A19 fallback.
+    """
+    model_key = "ltx_ic_lora"
+    base = model_root / "LTX-2.5"
+    representatives = (
+        "LTX-2.5-22b-IC-LoRA-Ingredients",
+        "LTX-2.5-22b-IC-LoRA-Restore",
+    )
+    notes = (
+        "Representative Diffusers load for the LTX-2.5 Creative Lab collection "
+        "(https://huggingface.co/collections/Lightricks/ltx-25-creative-lab). "
+        "Gated repos. Vendor path is ComfyUI; a pass here is a Diffusers load only, "
+        "not a render-quality claim. The same pass/fail covers the rest of the "
+        "collection until a per-adapter result exists."
+    )
+    missing = [str(base)] if not base.exists() else []
+    missing.extend(name for name in representatives if not (model_root / name).exists())
+    if missing:
+        print(f"⚠️  IC-LoRA weights missing: {', '.join(missing)}")
+        return {
+            "model_key": model_key,
+            "status": "missing_weights",
+            "vram_fit": False,
+            "errors": [f"Missing: {', '.join(missing)}"],
+            "notes": notes,
+        }
+
+    try:
+        from diffusers import LTX2Pipeline
+    except Exception as exc:
+        print(f"⚠️  LTX2Pipeline unavailable: {exc}")
+        return {
+            "model_key": model_key,
+            "status": "pipeline_unavailable",
+            "vram_fit": False,
+            "precision": precision,
+            "errors": [
+                f"LTX2Pipeline import failed: {exc}. "
+                "Diffusers did not expose the LTX-2.5 pipeline in this environment."
+            ],
+            "notes": notes,
+        }
+
+    try:
+        import time
+        print(f"Loading LTX-2.5 from {base} to test IC-LoRA attach...")
+        start = time.time()
+        dtype = torch.bfloat16
+        pipe = LTX2Pipeline.from_pretrained(str(base), torch_dtype=dtype)
+        if torch.cuda.is_available():
+            pipe = pipe.to("cuda")
+        loaded = []
+        for name in representatives:
+            pipe.load_lora_weights(str(model_root / name), adapter_name=name)
+            loaded.append(name)
+        load_time = time.time() - start
+        peak = torch.cuda.max_memory_allocated() / 1e9 if torch.cuda.is_available() else None
+        vram_fit = bool(peak is not None and peak < VRAM_THRESHOLD_GB)
+        print(f"Attached {loaded}; peak {peak}")
+        return {
+            "model_key": model_key,
+            "status": "pass" if vram_fit else "fail_vram",
+            "vram_fit": vram_fit,
+            "peak_vram_gb": None if peak is None else round(peak, 2),
+            "load_time_sec": round(load_time, 1),
+            "precision": precision,
+            "errors": [],
+            "notes": notes + " Load-only; no render was run.",
+        }
+    except Exception as exc:
+        print(f"⚠️  IC-LoRA Diffusers load failed: {exc}")
+        return {
+            "model_key": model_key,
+            "status": "pipeline_unavailable",
+            "vram_fit": False,
+            "precision": precision,
+            "errors": [f"{type(exc).__name__}: {exc}"],
+            "notes": notes + " Use the Section A19 fallback. Do not route through ComfyUI.",
+        }
 
 def test_image_model_flux3(model_root: Path) -> Dict[str, Any]:
     return {"model_key": "flux_3_image_klein", "status": "not_implemented", "vram_fit": False, "errors": ["Test TBD"]}
@@ -311,6 +546,8 @@ MODEL_TESTS = {
     "ltx_2_5": test_video_model_ltx,
     "wan_bernini": test_video_model_wan,
     "bernini_r": test_video_model_bernini_r,
+    "h3_ref2va": test_h3_ref2va,
+    "ltx_ic_lora": test_ltx_ic_lora,
     "krea_2_turbo": test_image_model_krea2,
     "z_image_turbo": test_image_model_zimage,
     "flux_3_image_klein": test_image_model_flux3,
@@ -366,7 +603,7 @@ def main():
         test_fn = MODEL_TESTS[model_key]
         
         # Pass precision for video models
-        if model_key in ["minimax_h3", "ltx_2_5", "wan_bernini"]:
+        if model_key in ["minimax_h3", "ltx_2_5", "wan_bernini", "h3_ref2va", "ltx_ic_lora"]:
             result = test_fn(model_root, args.precision)
         else:
             result = test_fn(model_root)

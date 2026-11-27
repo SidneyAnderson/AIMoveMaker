@@ -62,7 +62,7 @@ python env_check.py --model-root ~/AIModels
 | Test | Models | Time (estimate) | VRAM Peak |
 |------|--------|----------------|-----------|
 | env_check.py | (none) | 10 seconds | <1 GB |
-| vram_fit.py | 7 models + 1 LoRA | 20-40 minutes | 10-30 GB per model |
+| vram_fit.py | video families, image models, Ref2VA gate, IC-LoRA gate, Bernini gate | 30-60 minutes | 10-30 GB per model |
 | converter_check.py | H3 (stub) | 5 minutes | TBD |
 
 **Total:** ~45 minutes if all weights are pre-downloaded, 2-4 hours including downloads.
@@ -80,6 +80,8 @@ Quick reference to all Hugging Face model pages:
 | **Wan 2.2 I2V** | [Wan-AI/Wan2.2-I2V-A14B](https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B) | No | Apache-2.0 |
 | **Wan Animate 2** | [Wan-AI/Wan2.2-Animate-14B](https://huggingface.co/Wan-AI/Wan2.2-Animate-14B) | No | Apache-2.0 |
 | **Bernini-R** | [ByteDance/Bernini-R-Diffusers](https://huggingface.co/ByteDance/Bernini-R-Diffusers) | No | Apache-2.0 |
+| **LTX-2.5 IC-LoRA Ingredients** | [Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients) | Yes | other (same gate as LTX-2.5) |
+| **LTX-2.5 IC-LoRA Restore** | [Lightricks/LTX-2.5-22b-IC-LoRA-Restore](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Restore) | Yes | other (same gate as LTX-2.5) |
 | **Krea 2 Turbo** | [krea/Krea-2-Turbo](https://huggingface.co/krea/Krea-2-Turbo) | Yes | Krea 2 Community License |
 | **Krea 2 Raw** | [krea/Krea-2-Raw](https://huggingface.co/krea/Krea-2-Raw) | Yes | Krea 2 Community License |
 | **Z-Image-Turbo** | [Tongyi-MAI/Z-Image-Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) | No | Apache-2.0 |
@@ -108,24 +110,39 @@ Quick reference to all Hugging Face model pages:
    - Test: Load base Wan, render 16-frame 512×512 clip; Bernini-R requires ByteDance inference code (not stock Diffusers pipeline class)
    - Precision: BF16 or FP8
    - License: Apache-2.0 (not gated)
+   - Bernini-R load: separate venv, `pip install "diffusers==0.35.2"`. Do not install that pin into the app environment (`"diffusers>=0.40"`).
+
+### Routing gates (internal tools, not extra families)
+
+4. **H3 Ref2VA** (`h3_ref2va`)
+   - Same weights as [MiniMaxAI/MiniMax-H3](https://huggingface.co/MiniMaxAI/MiniMax-H3), partition `transformer_ref`
+   - No extra download
+   - Passes only if this script finds a Diffusers class that loads that partition
+   - Otherwise status is `pipeline_unavailable` or `missing_weights`. The SGLang alternative is `--model-variant ref2va` in the H3 venv; this script does not start that server
+   - Open release excludes Context-IR and Regenerate-2K
+
+5. **LTX IC-LoRA load** (`ltx_ic_lora`)
+   - Collection: [LTX-2.5 Creative Lab](https://huggingface.co/collections/Lightricks/ltx-25-creative-lab) (15 repos, all HF-gated)
+   - This entry loads two representatives on the base pipeline: Ingredients (consistency) and Restore (restore/refine)
+   - Lightricks documents these for ComfyUI. A ComfyUI load is not a pass. If Diffusers rejects them, status is `pipeline_unavailable` and the product uses the fallback
 
 ### Image Models (4 shipped defaults)
 
-4. **Krea 2 Turbo** (`krea_2_turbo`)
+6. **Krea 2 Turbo** (`krea_2_turbo`)
    - Hugging Face: [`krea/Krea-2-Turbo`](https://huggingface.co/krea/Krea-2-Turbo) (gated: requires license acceptance)
    - Test: Load via `Krea2Pipeline`, render 1024×1024 still (8 steps, CFG off)
    - Also: [`krea/Krea-2-Raw`](https://huggingface.co/krea/Krea-2-Raw) (gated: for LoRA training)
 
-5. **Z-Image-Turbo** (`z_image_turbo`)
+7. **Z-Image-Turbo** (`z_image_turbo`)
    - Hugging Face: [`Tongyi-MAI/Z-Image-Turbo`](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) (not gated, Apache-2.0)
    - Test: Load via `ZImagePipeline`, render 1024×1024 still (9 steps)
 
-6. **FLUX 3 Image Klein** (`flux_3_image_klein`)
+8. **FLUX 3 Image Klein** (`flux_3_image_klein`)
    - Hugging Face: [`black-forest-labs/flux-3-image-klein`](https://huggingface.co/black-forest-labs/flux-3-image-klein) (gated: requires license acceptance)
    - Test: Load via `Flux3DistilledModularPipeline`, render 1024×1024 still (16 steps)
    - **Also test:** With 9B prompt upsampler offloaded (measure separately)
 
-7. **MiniMax-H3-Image** (`minimax_h3_image`)
+9. **MiniMax-H3-Image** (`minimax_h3_image`)
    - Hugging Face: [`MiniMaxAI/MiniMax-H3-Image`](https://huggingface.co/MiniMaxAI/MiniMax-H3-Image) (not gated, MiniMax-H3-Image Community License)
    - Test: Load via `MiniMaxH3ImageModularPipeline`, render 16:9 still (try 1920×1080 first)
    - **Gate:** Official BF16 + full text encoder won't fit; test community quantization if available
@@ -144,6 +161,7 @@ huggingface-cli login  # Paste your HF token (required for gated models)
 - [krea/Krea-2-Turbo](https://huggingface.co/krea/Krea-2-Turbo) and [krea/Krea-2-Raw](https://huggingface.co/krea/Krea-2-Raw)
 - [black-forest-labs/flux-3-image-klein](https://huggingface.co/black-forest-labs/flux-3-image-klein)
 - [Lightricks/LTX-2.5](https://huggingface.co/Lightricks/LTX-2.5)
+- [Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients) and [Lightricks/LTX-2.5-22b-IC-LoRA-Restore](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Restore) (and the rest of the [Creative Lab](https://huggingface.co/collections/Lightricks/ltx-25-creative-lab) collection if you download more than the two representatives)
 
 ### Windows (PowerShell) Downloads
 
@@ -151,6 +169,8 @@ huggingface-cli login  # Paste your HF token (required for gated models)
 # Video models
 huggingface-cli download MiniMaxAI/MiniMax-H3 --local-dir D:\AIModels\MiniMax-H3
 huggingface-cli download Lightricks/LTX-2.5 --local-dir D:\AIModels\LTX-2.5
+huggingface-cli download Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients --local-dir D:\AIModels\LTX-2.5-22b-IC-LoRA-Ingredients
+huggingface-cli download Lightricks/LTX-2.5-22b-IC-LoRA-Restore --local-dir D:\AIModels\LTX-2.5-22b-IC-LoRA-Restore
 huggingface-cli download Wan-AI/Wan2.2-I2V-A14B --local-dir D:\AIModels\Wan2.2-I2V-A14B
 huggingface-cli download Wan-AI/Wan2.2-T2V-A14B-Diffusers --local-dir D:\AIModels\Wan2.2-T2V-A14B-Diffusers
 huggingface-cli download Wan-AI/Wan2.2-Animate-14B --local-dir D:\AIModels\Wan2.2-Animate-14B
@@ -170,6 +190,8 @@ huggingface-cli download MiniMaxAI/MiniMax-H3-Image --local-dir D:\AIModels\Mini
 # Video models
 huggingface-cli download MiniMaxAI/MiniMax-H3 --local-dir ~/AIModels/MiniMax-H3
 huggingface-cli download Lightricks/LTX-2.5 --local-dir ~/AIModels/LTX-2.5
+huggingface-cli download Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients --local-dir ~/AIModels/LTX-2.5-22b-IC-LoRA-Ingredients
+huggingface-cli download Lightricks/LTX-2.5-22b-IC-LoRA-Restore --local-dir ~/AIModels/LTX-2.5-22b-IC-LoRA-Restore
 huggingface-cli download Wan-AI/Wan2.2-I2V-A14B --local-dir ~/AIModels/Wan2.2-I2V-A14B
 huggingface-cli download Wan-AI/Wan2.2-T2V-A14B-Diffusers --local-dir ~/AIModels/Wan2.2-T2V-A14B-Diffusers
 huggingface-cli download Wan-AI/Wan2.2-Animate-14B --local-dir ~/AIModels/Wan2.2-Animate-14B

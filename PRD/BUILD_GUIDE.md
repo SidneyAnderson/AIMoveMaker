@@ -5,7 +5,7 @@
 **Version:** 1.0  
 **Date:** 27 November 2026  
 **Target:** Coding agents building Movie Maker features on AIMoveMaker v1 codebase  
-**Foundation:** Addendum v1.3, Integration Map, actual AIMoveMaker code at `/workspace`
+**Foundation:** Addendum v1.4, Integration Map, actual AIMoveMaker code at `/workspace`
 
 > **For coding agents:** Start with [`/AGENTS.md`](../AGENTS.md) for comprehensive instructions, hard rules, and the Phase 0 GPU test handoff. This guide provides implementation details; AGENTS.md provides the workflow.
 
@@ -232,7 +232,15 @@ def downgrade() -> None:
 - Add `Project.core_video_model` (enum: `minimax_h3`, `ltx_2_5`, `wan_bernini`) set at creation
 - Add `Project.workflow_profile_id` (FK) set at creation
 - Both fields immutable—no PATCH allowed
-- Remove `VideoClip.model_id` and `Keyframe.model_id` selectors
+- `VideoClip` MUST NOT select a different video family. `Keyframe.model_id` stays the image-model selector (Section A18). Image models are not a second video family
+- The locked family covers generate, continue, edit, consistency, and restore/refine. Do not mix video families inside one project
+
+### 2a. One Core-Operation Set; Family Tools Stay Internal
+
+- User-facing operations, on every family: `generate_shot`, `continue_shot`, `edit_shot`, `keep_consistent`, `restore_refine` (addendum Section A19)
+- Do not put `t2va`, `fl2va`, `ref2va`, `r2v`, `rv2v`, IC-LoRA names, Bernini, or Wan Animate in the Creative UI
+- Route through `FamilyAdapter`. If the Phase 0 gate for that route is missing or not `pass`, run the documented fallback. Do not call another video family and do not call ComfyUI
+- Bernini-R runs only in `.venvs/bernini` (`diffusers==0.35.2`). The app environment stays on `"diffusers>=0.40"`
 
 ### 3. Runtime-Agnostic: Diffusers/SGLang Only, No ComfyUI
 
@@ -256,7 +264,8 @@ def downgrade() -> None:
 
 - Implement stubs/feature flags for TBD items
 - Do NOT invent behavior
-- Examples: pruned AdaLN math, ComfyUI int8_HQ import, H3 RefMods port, IC-LoRA
+- Examples: pruned AdaLN math, ComfyUI int8_HQ import, H3 RefMods port, Prompt Relay, Bernini-R-S2V, Context-IR, Regenerate-2K
+- IC-LoRAs and Ref2VA and Bernini-R are not TBD features to skip. They are internal routes behind Phase 0 gates, with fallbacks in Section A19
 
 ---
 
@@ -264,9 +273,9 @@ def downgrade() -> None:
 
 This section provides detailed implementation steps for each phase. See `/workspace/PRD/MovieMaker_Integration_Map.md` for the complete file-by-file breakdown.
 
-### Phase 0: H3 + LoRA + Converter Proof (4–6d) — **Owner Runs Locally**
+### Phase 0: H3 + LoRA + Converter Proof and Routing Gates (6–9d, estimate) — **Owner Runs Locally**
 
-**Goal:** Prove MiniMax H3 + LoRA + ComfyUI→Diffusers converter + FP8/NVFP4 quantization on RTX 5090 within 32 GB VRAM. Spike outside main app.
+**Goal:** Prove MiniMax H3 + LoRA + ComfyUI→Diffusers converter + FP8/NVFP4 quantization on RTX 5090 within 32 GB VRAM. Also record three routing gates: `h3_ref2va`, `ltx_ic_lora`, `bernini_r`. Spike outside main app.
 
 **⚠️ IMPORTANT: YOU DO NOT HAVE A GPU.**
 
@@ -290,8 +299,16 @@ Phase 0 is run by the repository owner (Sidney) on his local RTX 5090 PC using t
 
 **Never fake GPU measurements.** See AGENTS.md for the complete Phase 0 handoff protocol.
 
+**Routing gates (same kit, skip cleanly if weights are missing):**
+- `h3_ref2va` — Ref2VA partition of `MiniMaxAI/MiniMax-H3` (`transformer_ref`). Pass means a Diffusers ModularPipeline class for that partition loaded, or the owner records a measured SGLang run with `--model-variant ref2va`. This kit does not start that server.
+- `ltx_ic_lora` — Diffusers load of [Ingredients](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients) and [Restore](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Restore) on top of LTX-2.5. Both repos are HF-gated. A ComfyUI load is not a pass.
+- `bernini_r` — [Bernini-R-Diffusers](https://huggingface.co/ByteDance/Bernini-R-Diffusers) inside a venv pinned to `diffusers==0.35.2`. Running it under the app's `"diffusers>=0.40"` environment is `pipeline_unavailable`, not a pass.
+
 **Key Files (created by owner after tests):**
 - `phase0/results/minimax_h3.json`
+- `phase0/results/h3_ref2va.json`
+- `phase0/results/ltx_ic_lora.json`
+- `phase0/results/bernini_r.json`
 - `phase0/results/krea_2_turbo.json`
 - `phase0/results/z_image_turbo.json`
 - `phase0/results/flux_3_image_klein.json`
@@ -301,7 +318,7 @@ Phase 0 is run by the repository owner (Sidney) on his local RTX 5090 PC using t
 
 ---
 
-### Phase 1: Project Lock, Celery Queues & Multi-User Library (5–7d)
+### Phase 1: Project Lock, Routing Interface, Celery Queues & Multi-User Library (6–8d, estimate)
 
 **Goal:** Add immutable project core model, extend Celery queues, build library scanner, split admin secrets.
 
@@ -315,6 +332,24 @@ Phase 0 is run by the repository owner (Sidney) on his local RTX 5090 PC using t
 
 **New Models:**
 - `backend/models/workflow_profile.py`
+
+**Routing interface (before engines exist):**
+
+```python
+# backend/pipelines/adapters/base.py
+class CoreOperation(str, Enum):
+    generate_shot = "generate_shot"
+    continue_shot = "continue_shot"
+    edit_shot = "edit_shot"
+    keep_consistent = "keep_consistent"
+    restore_refine = "restore_refine"
+
+class FamilyAdapter(Protocol):
+    family: str  # minimax_h3 | ltx_2_5 | wan_bernini
+    def run(self, operation: CoreOperation, request: ShotRequest) -> RouteResult: ...
+```
+
+`RouteResult` carries the output asset ids and `route_trace` (`tool_id`, `native`, `phase0_gate`, `fallback_reason`). Phase 1 ships the protocol plus a fallback-only stub per family so continuation and consistency are callable before Phase 3 fills native routes. Creative API responses drop `route_trace`.
 
 **Service Updates:**
 - `project_service.py`: block `core_video_model` PATCH, add `clone_project()`
@@ -374,19 +409,20 @@ task_queues={
 
 ---
 
-### Phase 3: H3 Celery GPU Workers, Seed Hunter Stages, Continuity & Upscaler (10–14d)
+### Phase 3: Family Adapters for Every Core Operation, then Seed Hunter (14–18d, estimate)
 
-**Goal:** Replace `video.py` with `RuntimeAdapter`s, implement 3-seed Stage-1 previews, Stage-2 upscale, voice cloner, 17n+5 continuation.
+**Goal:** Implement `FamilyAdapter.run` for all five operations on each family. Land continuation and consistency before Seed Hunter extras. Then 3-seed previews, Stage-2 upscale, voice cloner, and H3 17n+5 continuation.
 
 **Replaced Files:**
 - `backend/pipelines/video.py` → adapter dispatcher
 
-**New Adapters:**
-- `backend/pipelines/adapters/base.py`
-- `backend/pipelines/adapters/h3_adapter.py` (`.venvs/h3`, `t2va`/`fl2va`/`ref2va`)
-- `backend/pipelines/adapters/ltx_adapter.py` (`.venvs/ltx`, LTX-2.5)
-- `backend/pipelines/adapters/wan_adapter.py` (`.venvs/wan`, Wan 2.2 + Animate 2)
-- `backend/pipelines/adapters/upscale_adapter.py`
+**New Adapters (order: continue + consistency, then the other three operations, then Seed Hunter):**
+- `backend/pipelines/adapters/base.py` (protocol from Phase 1)
+- `backend/pipelines/adapters/h3_adapter.py` (`.venvs/h3`; FL2VA for generate; Ref2VA only if `phase0/results/h3_ref2va.json` status is `pass`, via a separate SGLang process `--model-variant ref2va` or ModularPipeline)
+- `backend/pipelines/adapters/ltx_adapter.py` (`.venvs/ltx`, Diffusers ≥ 0.40; IC-LoRA routes only if `ltx_ic_lora` passed)
+- `backend/pipelines/adapters/wan_adapter.py` (`.venvs/wan`, Wan 2.2 + Wan Animate 2, Diffusers ≥ 0.40)
+- `backend/pipelines/adapters/bernini_worker.py` (`.venvs/bernini`, `diffusers==0.35.2`, called by the Wan adapter for edit and consistency only)
+- `backend/pipelines/adapters/upscale_adapter.py` (finishing fallback, not a video family)
 
 **Migration:** `<timestamp>_clip_previews_continuation_and_upscale.py`
 
@@ -437,7 +473,7 @@ task_queues={
 
 ---
 
-### Phase 5: NLE Seam Finishing, Vast.ai VM Worker & Native Redis Installers (9–12d)
+### Phase 5: NLE Seam Finishing, Vast.ai VM Worker, Native Redis, Bernini venv (10–13d, estimate)
 
 **Goal:** Seam color grading, AnimeCadence, Vast.ai SSH worker, native Redis installers (no Docker).
 
