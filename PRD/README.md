@@ -2,6 +2,8 @@
 
 This folder contains the Product Requirements Documents (PRDs) for the AI Movie Maker end-to-end AI film production platform.
 
+> **For coding agents:** Start with [`/AGENTS.md`](../AGENTS.md) for implementation instructions, hard rules, and the Phase 0 GPU test handoff. The owner's RTX 5090 test kit is in [`/phase0/`](../phase0/).
+
 ---
 
 ## Core Documentation
@@ -18,29 +20,29 @@ Word format version of the baseline PRD v1.0.
 
 ---
 
-## Movie Maker Addendum (v1.2)
+## Movie Maker Addendum
 
-### **addendum/AIMoveMaker_PRD_Addendum_MovieMaker_v1.3.md**
-**Version:** 1.3 — Addendum to PRD v1.0  
-**Status:** Specification for the v1.3 build — not yet implemented  
-**Date:** November 26, 2026  
-**Changelog:** v1.3 adds Section A18 keyframe image-model defaults: shipped T2I default Krea 2 Turbo (`krea_2_turbo`), automatic fallback Z-Image-Turbo (`z_image_turbo`), shipped edit/consistency default FLUX 3 Image Klein (`flux_3_image_klein`), MiniMax-H3-Image becomes H3-profile default only after license authorization + 32GB VRAM fit gates; per-profile `default_image_model_key` / `default_image_edit_model_key`; Import Model applies to image models. v1.2 moves LTX core to LTX-2.5, pins Diffusers ≥ 0.40, adds Wan Animate 2 pipeline support.
+### **addendum/AIMoveMaker_PRD_Addendum_MovieMaker_v1.4.md**
+**Version:** 1.4 — Addendum to PRD v1.0  
+**Status:** Specification for the v1.4 build — not yet implemented  
+**Date:** November 27, 2026  
+**Changelog:** v1.4 defines one core-operation set for every video family (generate, continue, edit, keep consistent, restore/refine). Family tools are internal routing (Section A19). Delivery estimate is 49–67 days (estimate), superseding 41–58. [Bernini-R](https://huggingface.co/ByteDance/Bernini-R-Diffusers) is the internal Wan edit/reference route, in its own virtualenv because upstream pins `diffusers==0.35.2`. Bernini-R-S2V stays out of scope. v1.3 adds Section A18 keyframe image-model defaults: shipped T2I default Krea 2 Turbo (`krea_2_turbo`), automatic fallback Z-Image-Turbo (`z_image_turbo`), shipped edit/consistency default FLUX 3 Image Klein (`flux_3_image_klein`), MiniMax-H3-Image becomes H3-profile default only after license authorization + 32GB VRAM fit gates; per-profile `default_image_model_key` / `default_image_edit_model_key`; Import Model applies to image models. v1.2 moves LTX core to LTX-2.5, pins Diffusers ≥ 0.40, adds Wan Animate 2 pipeline support.
 
 The build-contract addendum extending AI Movie Maker v1 with the Movie Maker layers: MiniMax H3 runtime-agnostic engine, Import Model converter pipeline with safety gates, project-level core model lock, multi-user model library, Seed Hunter v3 workflow (6-field structured prompts, RefMods, 3-seed Stage-1 previews, 3D latent upscale Stage-2, dialogue cloner, 17n+5 seamless continuation), keyframe image model defaults (Krea 2 Turbo, FLUX 3 Image Klein, MiniMax-H3-Image with gates), LTX-2.5 & Wan Animate 2 support, NLE seam finishing tools, and native Redis installers (Ubuntu/Windows without Docker).
 
 **Key Features:**
-- Immutable per-project core video model (`minimax_h3`, `ltx_2_5`, or `wan_bernini`)
-- Keyframe image model defaults (v1.3): Krea 2 Turbo T2I default with Z-Image-Turbo fallback; FLUX 3 Image Klein edit/consistency default; MiniMax-H3-Image H3-profile default gated by license + VRAM fit
+- Immutable per-project core video model ([`minimax_h3`](https://huggingface.co/MiniMaxAI/MiniMax-H3), [`ltx_2_5`](https://huggingface.co/Lightricks/LTX-2.5), or [`wan_bernini`](https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B))
+- Keyframe image model defaults (v1.3): [Krea 2 Turbo](https://huggingface.co/krea/Krea-2-Turbo) T2I default with [Z-Image-Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) fallback; [FLUX 3 Image Klein](https://huggingface.co/black-forest-labs/flux-3-image-klein) edit/consistency default; [MiniMax-H3-Image](https://huggingface.co/MiniMaxAI/MiniMax-H3-Image) H3-profile default gated by license + VRAM fit
 - Import Model: Civitai/local intake → header detection → ComfyUI-to-Diffusers conversion → FP8/NVFP4 quantization → test render safety gate → RBAC-guarded cleanup (applies to video and image models)
 - Multi-user model/LoRA library with `global`/`user` visibility, `owner_id`, and shared-folder reference checks
 - H3 Seed Hunter v3 integration: structured `Singularity` prompts, RefMods, multi-seed previews, voice cloner, continuation with quality resets
 - Runtime-agnostic: standard Diffusers/SGLang only; ComfyUI compatibility explicitly dropped
 - Admin `.env` secrets vs optional per-user credential overrides
 - Celery per-engine GPU queue routing (`.venvs/h3`, `.venvs/ltx`, `.venvs/audio`)
-- Effort estimate: 41–58 days across Phases 0–5
+- Effort estimate: 49–67 days (estimate) across Phases 0–5. The earlier 41–58 day figure did not include the core-operation routing layer.
 
-### **addendum/AIMoveMaker_PRD_Addendum_MovieMaker_v1.3.docx**
-Word format version of the v1.3 addendum.
+### **addendum/AIMoveMaker_PRD_Addendum_MovieMaker_v1.4.docx**
+Word format version of the v1.4 addendum.
 
 ---
 
@@ -49,7 +51,7 @@ Word format version of the v1.3 addendum.
 ### **MovieMaker_Plan.md**
 **Title:** Bringing Long-Video-Creator into AIMoveMaker  
 **Version:** Updated 2026-11-26  
-**Estimate:** 41–58 days across Phases 0–5  
+**Estimate:** 41–58 days on this page. Delivery estimate in addendum v1.4 is **49–67 days (estimate)**.
 
 Comprehensive gap analysis and phased implementation plan. Code-verified audit of 24 feature areas comparing Long-Video-Creator/Seed Hunter v3 specifications against the implemented AI Movie Maker v1 codebase. Documents the multi-user architecture decision (keeping Redis/Celery/RBAC), runtime-agnostic standard weights policy, Import Model pipeline design, and six-phase delivery roadmap.
 
@@ -67,7 +69,7 @@ Comprehensive gap analysis and phased implementation plan. Code-verified audit o
 ### **MovieMaker_Integration_Map.md**
 **Title:** Integration Plan: Movie Maker into AIMoveMaker  
 **Version:** Updated 2026-11-26  
-**Estimate:** 41–58 days across Phases 0–5  
+**Estimate:** 41–58 days on this page. Delivery estimate in addendum v1.4 is **49–67 days (estimate)**.
 
 File-by-file integration blueprint mapping the phased plan onto the AIMoveMaker codebase. Inventories 46 component groups (backend core, models/schemas, routers/services, pipelines/tasks, frontend, scripts) with disposition (Reuse as-is / Refactor / Replace / Remove) and phase assignments. Documents 8 critical integration seams with options and recommendations.
 
@@ -129,6 +131,12 @@ Previous version of the Movie Maker addendum. Retained for historical reference 
 
 Previous version (superseded by v1.3). Retained for historical reference and change tracking.
 
+### **history/AIMoveMaker_PRD_Addendum_MovieMaker_v1.3.md**
+**Version:** 1.3 — Addendum to PRD v1.0  
+**Date:** November 26, 2026  
+
+Previous version (superseded by v1.4). Retained for historical reference and change tracking.
+
 ---
 
 ## Document Relationships
@@ -163,11 +171,13 @@ All PRD documents follow the build-contract convention system:
 
 ---
 
-## Key Architectural Decisions (as of 2026-11-26)
+## Key Architectural Decisions (as of 2026-11-27)
 
 1. **Multi-user foundation preserved:** Redis 7, Celery 5, JWT/OAuth, Creative/Engineer RBAC, and Redis pub/sub WebSockets remain as core platform infrastructure.
 
-2. **Project-level core model lock:** Every project is immutable to one core video model family (`minimax_h3`, `ltx_2_5`, or `wan_bernini`) set at creation. Migration requires cloning into a new project.
+2. **Project-level core model lock:** Every project is immutable to one core video model family (`minimax_h3`, `ltx_2_5`, or `wan_bernini`) for the whole video pipeline. Image keyframe models are a separate layer, not a second video family. Migration requires cloning into a new project.
+
+2a. **One operation set:** Generate shot, continue, edit part of a shot, keep consistent, and restore/upscale/refine. The same five appear on every family. FL2VA, Ref2VA, IC-LoRA, Wan Animate 2, and Bernini-R are internal routes. See addendum Section A19.
 
 3. **Runtime-agnostic policy:** Standard Diffusers (≥ 0.40) or SGLang (≥ 0.5.17) only. ComfyUI compatibility is explicitly not a goal. ComfyUI-packed models and LoRAs are converted once at import.
 
@@ -187,13 +197,13 @@ All PRD documents follow the build-contract convention system:
 
 | Phase | Estimate | Focus |
 |-------|----------|-------|
-| Phase 0 | 4–6 days | H3 + LoRA + converter round-trip proof on RTX 5090 |
-| Phase 1 | 5–7 days | Project lock, Celery queues, multi-user library |
+| Phase 0 | 6–9 days | H3 converter proof plus Ref2VA, IC-LoRA, and Bernini-R gates on the RTX 5090 |
+| Phase 1 | 6–8 days | Project lock, core-operation interface, Celery queues, library |
 | Phase 2 | 7–10 days | Import Model, converter, quantizer, RBAC safety gate |
-| Phase 3 | 10–14 days | H3 Celery GPU workers, Seed Hunter stages, continuity, upscaler |
-| Phase 4 | 6–9 days | H3 Prompt IDE, RefMods, LoRA governance, ASR/SAM |
-| Phase 5 | 9–12 days | NLE seam finishing, Vast.ai VM, native Redis installers |
-| **Total** | **41–58 days** | Phased build from spike to production |
+| Phase 3 | 14–18 days | All five core operations on each family, then Seed Hunter extras |
+| Phase 4 | 6–9 days | Prompt IDE, LoRA governance, ASR/SAM |
+| Phase 5 | 10–13 days | NLE seams, Vast.ai, native Redis, Bernini virtualenv |
+| **Total** | **49–67 days (estimate)** | Supersedes 41–58 |
 
 ---
 

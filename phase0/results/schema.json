@@ -1,0 +1,148 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "Phase 0 VRAM Fit Result",
+  "description": "Schema for Phase 0 GPU test results consumed by ModelRegistry seed",
+  "type": "object",
+  "required": ["model_key", "status"],
+  "properties": {
+    "model_key": {
+      "type": "string",
+      "description": "Machine key (minimax_h3, ltx_2_5, krea_2_turbo, etc.)",
+      "examples": ["minimax_h3", "krea_2_turbo", "z_image_turbo"]
+    },
+    "test_date": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp with timezone"
+    },
+    "hardware": {
+      "type": "object",
+      "properties": {
+        "gpu": {
+          "type": "string",
+          "description": "GPU name",
+          "examples": ["NVIDIA GeForce RTX 5090"]
+        },
+        "vram_total_gb": {
+          "type": "number",
+          "description": "Total VRAM in GB"
+        },
+        "cuda_version": {
+          "type": "string",
+          "examples": ["12.8"]
+        },
+        "compute_capability": {
+          "type": "string",
+          "description": "CUDA compute capability",
+          "examples": ["sm_120"]
+        },
+        "pytorch_version": {
+          "type": "string"
+        }
+      }
+    },
+    "precision": {
+      "type": "string",
+      "enum": ["fp8", "bf16", "fp16", "bfloat16"],
+      "description": "Model precision used in test"
+    },
+    "vram_fit": {
+      "type": "boolean",
+      "description": "True if peak_vram_gb < 32 * 0.9 (28.8 GB threshold)"
+    },
+    "peak_vram_gb": {
+      "type": "number",
+      "description": "Peak VRAM usage in GB during test render",
+      "minimum": 0
+    },
+    "load_time_sec": {
+      "type": "number",
+      "description": "Model load time in seconds",
+      "minimum": 0
+    },
+    "inference_time_sec": {
+      "type": "number",
+      "description": "Inference/render time in seconds",
+      "minimum": 0
+    },
+    "it_per_sec": {
+      "type": "number",
+      "description": "Iterations per second (steps / inference_time)",
+      "minimum": 0
+    },
+    "output_resolution": {
+      "type": "string",
+      "description": "Output resolution and frame count",
+      "examples": ["1024x576x22", "1024x1024"]
+    },
+    "status": {
+      "type": "string",
+      "enum": ["pass", "fail_vram", "error", "missing_weights", "pipeline_unavailable", "not_implemented", "gated_no_access"],
+      "description": "Test outcome. gated_no_access means Hugging Face returned 401/403 or GatedRepoError because the owner has not accepted the license. It is not a VRAM failure, not missing_weights, and must not set fits_target_vram."
+    },
+    "repo_id": {
+      "type": "string",
+      "description": "Hugging Face repo id when status is gated_no_access (for example Lightricks/LTX-2.5). No token."
+    },
+    "errors": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      },
+      "description": "Error messages if status != pass"
+    },
+    "notes": {
+      "type": "string",
+      "description": "Optional notes (e.g. 'With 1 LoRA loaded')"
+    }
+  },
+  "examples": [
+    {
+      "model_key": "minimax_h3",
+      "test_date": "2026-11-27T20:30:00Z",
+      "hardware": {
+        "gpu": "NVIDIA GeForce RTX 5090",
+        "vram_total_gb": 32.0,
+        "cuda_version": "12.8",
+        "compute_capability": "sm_120",
+        "pytorch_version": "2.5.0+cu128"
+      },
+      "precision": "fp8",
+      "vram_fit": true,
+      "peak_vram_gb": 28.3,
+      "load_time_sec": 45.2,
+      "inference_time_sec": 12.1,
+      "it_per_sec": 4.13,
+      "output_resolution": "1024x576x22",
+      "status": "pass",
+      "errors": [],
+      "notes": "With 1 LoRA loaded (character adapter, 150 MB)"
+    },
+    {
+      "model_key": "krea_2_turbo",
+      "test_date": "2026-11-27T20:35:00Z",
+      "hardware": {
+        "gpu": "NVIDIA GeForce RTX 5090",
+        "vram_total_gb": 32.0,
+        "cuda_version": "12.8",
+        "compute_capability": "sm_120",
+        "pytorch_version": "2.5.0+cu128"
+      },
+      "precision": "bfloat16",
+      "vram_fit": true,
+      "peak_vram_gb": 14.7,
+      "load_time_sec": 23.4,
+      "inference_time_sec": 3.2,
+      "it_per_sec": 2.5,
+      "output_resolution": "1024x1024",
+      "status": "pass",
+      "errors": []
+    },
+    {
+      "model_key": "wan_bernini",
+      "status": "missing_weights",
+      "vram_fit": false,
+      "errors": ["Weights not found at D:\\AIModels\\Wan-2.2"]
+    }
+  ]
+}

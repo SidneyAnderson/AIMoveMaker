@@ -3,9 +3,11 @@
 **Agent-Ready Technical Implementation Guide**
 
 **Version:** 1.0  
-**Date:** 26 November 2026  
+**Date:** 27 November 2026  
 **Target:** Coding agents building Movie Maker features on AIMoveMaker v1 codebase  
-**Foundation:** Addendum v1.2, Integration Map, actual AIMoveMaker code at `/workspace`
+**Foundation:** Addendum v1.4, Integration Map, actual AIMoveMaker code at `/workspace`
+
+> **For coding agents:** Start with [`/AGENTS.md`](../AGENTS.md) for comprehensive instructions, hard rules, and the Phase 0 GPU test handoff. This guide provides implementation details; AGENTS.md provides the workflow.
 
 ---
 
@@ -230,7 +232,15 @@ def downgrade() -> None:
 - Add `Project.core_video_model` (enum: `minimax_h3`, `ltx_2_5`, `wan_bernini`) set at creation
 - Add `Project.workflow_profile_id` (FK) set at creation
 - Both fields immutable—no PATCH allowed
-- Remove `VideoClip.model_id` and `Keyframe.model_id` selectors
+- `VideoClip` MUST NOT select a different video family. `Keyframe.model_id` stays the image-model selector (Section A18). Image models are not a second video family
+- The locked family covers generate, continue, edit, consistency, and restore/refine. Do not mix video families inside one project
+
+### 2a. One Core-Operation Set; Family Tools Stay Internal
+
+- User-facing operations, on every family: `generate_shot`, `continue_shot`, `edit_shot`, `keep_consistent`, `restore_refine` (addendum Section A19)
+- Do not put `t2va`, `fl2va`, `ref2va`, `r2v`, `rv2v`, IC-LoRA names, Bernini, or Wan Animate in the Creative UI
+- Route through `FamilyAdapter`. If the Phase 0 gate for that route is missing or not `pass`, run the documented fallback. Do not call another video family and do not call ComfyUI
+- Bernini-R runs only in `.venvs/bernini` (`diffusers==0.35.2`). The app environment stays on `"diffusers>=0.40"`
 
 ### 3. Runtime-Agnostic: Diffusers/SGLang Only, No ComfyUI
 
@@ -254,7 +264,8 @@ def downgrade() -> None:
 
 - Implement stubs/feature flags for TBD items
 - Do NOT invent behavior
-- Examples: pruned AdaLN math, ComfyUI int8_HQ import, H3 RefMods port, IC-LoRA
+- Examples: pruned AdaLN math, ComfyUI int8_HQ import, H3 RefMods port, Prompt Relay, Bernini-R-S2V, Context-IR, Regenerate-2K
+- IC-LoRAs and Ref2VA and Bernini-R are not TBD features to skip. They are internal routes behind Phase 0 gates, with fallbacks in Section A19
 
 ---
 
@@ -262,28 +273,57 @@ def downgrade() -> None:
 
 This section provides detailed implementation steps for each phase. See `/workspace/PRD/MovieMaker_Integration_Map.md` for the complete file-by-file breakdown.
 
-### Phase 0: H3 + LoRA + Converter Proof (4–6d)
+### Phase 0: H3 + LoRA + Converter Proof and Routing Gates (6–9d, estimate) — **Owner Runs Locally**
 
-**Goal:** Prove MiniMax H3 + LoRA + ComfyUI→Diffusers converter + FP8/NVFP4 quantization on RTX 5090 within 32 GB VRAM. Spike outside main app.
+**Goal:** Prove MiniMax H3 + LoRA + ComfyUI→Diffusers converter + FP8/NVFP4 quantization on RTX 5090 within 32 GB VRAM. Also record three routing gates: `h3_ref2va`, `ltx_ic_lora`, `bernini_r`. Spike outside main app.
 
-**Key Files:**
-- `.venvs/h3/` (isolated venv)
-- `scripts/spikes/h3_roundtrip_test.py`
-- `backend/pipelines/converters/h3_converter.py` (prototype)
-- `backend/hardware_profile.py` (add capability checks)
+**⚠️ IMPORTANT: YOU DO NOT HAVE A GPU.**
 
-**Core Tasks:**
-1. Create isolated H3 venv with `diffusers>=0.40`, `torchao`
-2. Prototype converter: detect layout, split QKV, expand AdaLN (TBD math)
-3. Test FP8/NVFP4 quantization
-4. Benchmark on RTX 5090: H3 + 1 LoRA < 32 GB VRAM
-5. Update `hardware_profile.py` with `sm_120` detection
+Phase 0 is run by the repository owner (Sidney) on his local RTX 5090 PC using the test kit in `/phase0/`.
+
+**Test Kit:** See [`/phase0/README.md`](../phase0/README.md)
+- `phase0/env_check.py` — GPU/CUDA/driver/library check
+- `phase0/vram_fit.py` — VRAM fit tests for all models
+- `phase0/converter_check.py` — H3 converter prototype (stub)
+- `phase0/run_all.ps1` / `phase0/run_all.sh` — Full test suite
+
+**Your Workflow:**
+1. **Build Phase 1+ assuming Phase 0 results will arrive later**
+2. **If `phase0/results/<model>.json` exists and `status` is `pass` or `fail_vram`:**
+   - Read it and populate `ModelRegistry.fits_target_vram` from `vram_fit` field
+   - Set `ModelRegistry.peak_vram_gb`, `load_time_sec` from results
+3. **If results are missing:**
+   - Leave `fits_target_vram` at the unset default
+   - Models stay inactive until proven
+   - UI shows "Phase 0 pending" or "VRAM fit: unknown"
+4. **If `status` is `gated_no_access`:**
+   - This is a Hugging Face 401/403 or `GatedRepoError`. The owner has not accepted that repo's license. It is not `missing_weights`, not `fail_vram`, and not a model failure
+   - Do not set `fits_target_vram` from this file. Do not mark the model as failing VRAM
+   - Treat it like pending Phase 0 and wait for the owner to accept the license and re-run
+   - The JSON names `repo_id` and a login hint. Never print or commit an HF token, and do not work around the gate with a mirror, a re-upload, or a shared token
+
+**Never fake GPU measurements.** See AGENTS.md for the complete Phase 0 handoff protocol.
+
+**Routing gates (same kit, skip cleanly if weights are missing):**
+- `h3_ref2va` — Ref2VA partition of `MiniMaxAI/MiniMax-H3` (`transformer_ref`). Pass means a Diffusers ModularPipeline class for that partition loaded, or the owner records a measured SGLang run with `--model-variant ref2va`. This kit does not start that server.
+- `ltx_ic_lora` — Diffusers load of [Ingredients](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients) and [Restore](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Restore) on top of LTX-2.5. Both repos are HF-gated. A ComfyUI load is not a pass.
+- `bernini_r` — [Bernini-R-Diffusers](https://huggingface.co/ByteDance/Bernini-R-Diffusers) inside a venv pinned to `diffusers==0.35.2`. Running it under the app's `"diffusers>=0.40"` environment is `pipeline_unavailable`, not a pass.
+
+**Key Files (created by owner after tests):**
+- `phase0/results/minimax_h3.json`
+- `phase0/results/h3_ref2va.json`
+- `phase0/results/ltx_ic_lora.json`
+- `phase0/results/bernini_r.json`
+- `phase0/results/krea_2_turbo.json`
+- `phase0/results/z_image_turbo.json`
+- `phase0/results/flux_3_image_klein.json`
+- ... etc (see `phase0/results/schema.json`)
 
 **TBD Gate:** Pruned AdaLN expansion math must pass visual/audio test
 
 ---
 
-### Phase 1: Project Lock, Celery Queues & Multi-User Library (5–7d)
+### Phase 1: Project Lock, Routing Interface, Celery Queues & Multi-User Library (6–8d, estimate)
 
 **Goal:** Add immutable project core model, extend Celery queues, build library scanner, split admin secrets.
 
@@ -297,6 +337,24 @@ This section provides detailed implementation steps for each phase. See `/worksp
 
 **New Models:**
 - `backend/models/workflow_profile.py`
+
+**Routing interface (before engines exist):**
+
+```python
+# backend/pipelines/adapters/base.py
+class CoreOperation(str, Enum):
+    generate_shot = "generate_shot"
+    continue_shot = "continue_shot"
+    edit_shot = "edit_shot"
+    keep_consistent = "keep_consistent"
+    restore_refine = "restore_refine"
+
+class FamilyAdapter(Protocol):
+    family: str  # minimax_h3 | ltx_2_5 | wan_bernini
+    def run(self, operation: CoreOperation, request: ShotRequest) -> RouteResult: ...
+```
+
+`RouteResult` carries the output asset ids and `route_trace` (`tool_id`, `native`, `phase0_gate`, `fallback_reason`). Phase 1 ships the protocol plus a fallback-only stub per family so continuation and consistency are callable before Phase 3 fills native routes. Creative API responses drop `route_trace`.
 
 **Service Updates:**
 - `project_service.py`: block `core_video_model` PATCH, add `clone_project()`
@@ -356,19 +414,20 @@ task_queues={
 
 ---
 
-### Phase 3: H3 Celery GPU Workers, Seed Hunter Stages, Continuity & Upscaler (10–14d)
+### Phase 3: Family Adapters for Every Core Operation, then Seed Hunter (14–18d, estimate)
 
-**Goal:** Replace `video.py` with `RuntimeAdapter`s, implement 3-seed Stage-1 previews, Stage-2 upscale, voice cloner, 17n+5 continuation.
+**Goal:** Implement `FamilyAdapter.run` for all five operations on each family. Land continuation and consistency before Seed Hunter extras. Then 3-seed previews, Stage-2 upscale, voice cloner, and H3 17n+5 continuation.
 
 **Replaced Files:**
 - `backend/pipelines/video.py` → adapter dispatcher
 
-**New Adapters:**
-- `backend/pipelines/adapters/base.py`
-- `backend/pipelines/adapters/h3_adapter.py` (`.venvs/h3`, `t2va`/`fl2va`/`ref2va`)
-- `backend/pipelines/adapters/ltx_adapter.py` (`.venvs/ltx`, LTX-2.5)
-- `backend/pipelines/adapters/wan_adapter.py` (`.venvs/wan`, Wan 2.2 + Animate 2)
-- `backend/pipelines/adapters/upscale_adapter.py`
+**New Adapters (order: continue + consistency, then the other three operations, then Seed Hunter):**
+- `backend/pipelines/adapters/base.py` (protocol from Phase 1)
+- `backend/pipelines/adapters/h3_adapter.py` (`.venvs/h3`; FL2VA for generate; Ref2VA only if `phase0/results/h3_ref2va.json` status is `pass`, via a separate SGLang process `--model-variant ref2va` or ModularPipeline)
+- `backend/pipelines/adapters/ltx_adapter.py` (`.venvs/ltx`, Diffusers ≥ 0.40; IC-LoRA routes only if `ltx_ic_lora` passed)
+- `backend/pipelines/adapters/wan_adapter.py` (`.venvs/wan`, Wan 2.2 + Wan Animate 2, Diffusers ≥ 0.40)
+- `backend/pipelines/adapters/bernini_worker.py` (`.venvs/bernini`, `diffusers==0.35.2`, called by the Wan adapter for edit and consistency only)
+- `backend/pipelines/adapters/upscale_adapter.py` (finishing fallback, not a video family)
 
 **Migration:** `<timestamp>_clip_previews_continuation_and_upscale.py`
 
@@ -419,7 +478,7 @@ task_queues={
 
 ---
 
-### Phase 5: NLE Seam Finishing, Vast.ai VM Worker & Native Redis Installers (9–12d)
+### Phase 5: NLE Seam Finishing, Vast.ai VM Worker, Native Redis, Bernini venv (10–13d, estimate)
 
 **Goal:** Seam color grading, AnimeCadence, Vast.ai SSH worker, native Redis installers (no Docker).
 
@@ -513,10 +572,10 @@ For UI/UX specifications, see `/workspace/PRD/UI_UX_SPEC.md`.
 **Goal:** Test keyframe image models on RTX 5090 32 GB to record `fits_target_vram` flags for IMG-GATE-02.
 
 **Models to test:**
-- Krea 2 Turbo (`krea/Krea-2-Turbo`) - 12B, shipped T2I default
-- Z-Image-Turbo (`Tongyi-MAI/Z-Image-Turbo`) - 6B, shipped fallback
-- FLUX 3 Image Klein (`black-forest-labs/flux-3-image-klein`) - 5.6B + 9B upsampler, shipped edit default
-- MiniMax-H3-Image (`MiniMaxAI/MiniMax-H3-Image`) - 68.65 GB BF16, H3-profile default after gates
+- [Krea 2 Turbo](https://huggingface.co/krea/Krea-2-Turbo) - 12B, shipped T2I default
+- [Z-Image-Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) - 6B, shipped fallback
+- [FLUX 3 Image Klein](https://huggingface.co/black-forest-labs/flux-3-image-klein) - 5.6B + 9B upsampler, shipped edit default
+- [MiniMax-H3-Image](https://huggingface.co/MiniMaxAI/MiniMax-H3-Image) - 68.65 GB BF16, H3-profile default after gates
 
 **Test script:** `scripts/spikes/image_model_vram_test.py`
 
@@ -572,6 +631,7 @@ IMAGE_MODEL_PACK = [
         "name": "Krea 2 Turbo",
         "type": "image",
         "image_role": "t2i",
+        "hf_repo": "krea/Krea-2-Turbo",  # https://huggingface.co/krea/Krea-2-Turbo
         "license_spdx_or_name": "Krea 2 Community License",
         "license_authorization_status": "required_missing",  # Admin must acknowledge
         "fits_target_vram": False,  # Set true after Phase 0
@@ -582,6 +642,7 @@ IMAGE_MODEL_PACK = [
         "name": "Krea 2 Raw",
         "type": "image",
         "image_role": "training_base",
+        "hf_repo": "krea/Krea-2-Raw",  # https://huggingface.co/krea/Krea-2-Raw
         "license_spdx_or_name": "Krea 2 Community License",
         "license_authorization_status": "required_missing",
         "is_active": False,
@@ -591,6 +652,7 @@ IMAGE_MODEL_PACK = [
         "name": "Z-Image-Turbo",
         "type": "image",
         "image_role": "t2i",
+        "hf_repo": "Tongyi-MAI/Z-Image-Turbo",  # https://huggingface.co/Tongyi-MAI/Z-Image-Turbo
         "license_spdx_or_name": "Apache-2.0",
         "license_authorization_status": "not_required",
         "fits_target_vram": True,  # Official: 16 GB
@@ -601,6 +663,7 @@ IMAGE_MODEL_PACK = [
         "name": "FLUX 3 Image Klein",
         "type": "image",
         "image_role": "both",
+        "hf_repo": "black-forest-labs/flux-3-image-klein",  # https://huggingface.co/black-forest-labs/flux-3-image-klein
         "license_spdx_or_name": "FLUX Kommunity License v.1.0",
         "license_authorization_status": "required_missing",
         "fits_target_vram": False,  # Set true after Phase 0 (upsampler offload TBD)
@@ -611,6 +674,7 @@ IMAGE_MODEL_PACK = [
         "name": "MiniMax-H3-Image",
         "type": "image",
         "image_role": "both",
+        "hf_repo": "MiniMaxAI/MiniMax-H3-Image",  # https://huggingface.co/MiniMaxAI/MiniMax-H3-Image
         "license_spdx_or_name": "MiniMax-H3-Image Community License",
         "license_authorization_status": "required_missing",  # US excluded territory
         "fits_target_vram": False,  # TBD: quantization required for 32 GB
@@ -752,7 +816,7 @@ async def edit_from_previous_keyframe(
 ---
 
 **v1.3 Summary:**
-- Shipped image models: Krea 2 Turbo (T2I default), Z-Image-Turbo (fallback), FLUX 3 Image Klein (edit default)
+- Shipped image models: [Krea 2 Turbo](https://huggingface.co/krea/Krea-2-Turbo) (T2I default), [Z-Image-Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) (fallback), [FLUX 3 Image Klein](https://huggingface.co/black-forest-labs/flux-3-image-klein) (edit default)
 - H3-profile default: MiniMax-H3-Image (gated by license + VRAM fit)
 - Phase 0: VRAM fit checks for all image models
 - Phase 1: Registry seed, profile default fields, keyframe defaulting logic

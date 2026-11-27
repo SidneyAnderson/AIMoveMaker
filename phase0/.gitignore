@@ -1,0 +1,23 @@
+# Phase 0 gitignore
+# Commit results JSON, ignore samples and venv
+
+# Python virtual environment
+.venv/
+venv/
+__pycache__/
+*.pyc
+
+# Sample outputs (images/videos)
+results/samples/
+*.png
+*.jpg
+*.mp4
+*.avi
+*.webm
+
+# Logs
+*.log
+
+# OS files
+.DS_Store
+Thumbs.db

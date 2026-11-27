@@ -2,10 +2,30 @@
 
 **UI/UX Design & Implementation Guide**
 
-**Version:** 1.0  
-**Date:** 26 November 2026  
+**Version:** 1.1  
+**Date:** 27 November 2026  
 **Target:** Coding agents building Movie Maker UI on AIMoveMaker v1 React/Vite frontend  
-**Foundation:** Addendum v1.2, actual frontend code at `/workspace/frontend/src`
+**Foundation:** Addendum v1.4, actual frontend code at `/workspace/frontend/src`
+
+## Core operations (all families)
+
+The shot UI is the same on MiniMax H3, LTX-2.5, and Wan/Bernini. The family is chosen once, when the project is created, and the control is locked after that (radio buttons on the create dialog, badge on the project, no switcher on the shot).
+
+Toolbar, in this order, for Creative (where the state machine allows generation) and Engineer:
+
+1. **Generate shot** — prompt, optional keyframe, optional end keyframe
+2. **Continue shot** — uses the selected shot
+3. **Edit part of shot** — in/out range on the selected shot, plus a prompt
+4. **Keep consistent** — reference images (character, location, or style)
+5. **Restore / upscale / refine** — selected shot, plus a plain-language intent (restore, deblur, colorize, upscale)
+
+Do not add a mode dropdown. Do not add toggles or badges named FL2VA, Ref2VA, IC-LoRA, Bernini, Wan Animate, `t2va`, `fl2va`, `ref2va`, `r2v`, or `rv2v`. Do not hide one of the five actions because a family lacks a native tool. The server runs the fallback and the button stays.
+
+Engineer and Admin get a collapsed **Diagnostics** drawer on the job. It shows the internal tool, whether the native route or the fallback ran, and the Phase 0 gate. Creative and Viewer do not get that drawer.
+
+Keyframe image models (Krea 2, Z-Image, FLUX Klein, H3-Image) stay on the keyframe, not on this toolbar. Picking one is not a video-family change.
+
+Older wireframes in this document that show a 6-field H3 prompt IDE, RefMods, or a partition label are prompt-writing and library tools. They do not add operations. If a label would teach the user an internal tool name, use the core-operation name instead.
 
 ---
 
@@ -470,7 +490,7 @@ Click [Scan Folders] → Progress modal → "Scanned 123 files, registered 45, s
    - Weight sliders: 0.0 - 1.0
 
 3. **LoRA Stack:**
-   - Filtered to project's `core_video_model` + partition (`fl2va` / `ref2va`)
+   - Filtered to the project's video family. Partition names (`fl2va` / `ref2va`) are diagnostics-only, not labels on this screen
    - Shows compatibility warnings from `lora_compatibility_notes`
    - Slots: Stage 1+2, Upscale-only, Vocal
 
@@ -1043,12 +1063,12 @@ For complete integration plan, see `/workspace/PRD/MovieMaker_Integration_Map.md
 
 **Default Resolution (IMG-03, IMG-04, IMG-05):**
 1. **For LTX/Wan projects:**
-   - T2I default: Krea 2 Turbo → falls back to Z-Image-Turbo if Krea 2 not enabled
-   - Edit default: FLUX 3 Image Klein
+   - T2I default: [Krea 2 Turbo](https://huggingface.co/krea/Krea-2-Turbo) → falls back to [Z-Image-Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) if Krea 2 not enabled
+   - Edit default: [FLUX 3 Image Klein](https://huggingface.co/black-forest-labs/flux-3-image-klein)
 
 2. **For H3 projects:**
-   - If IMG-GATE-01 & IMG-GATE-02 both pass: MiniMax-H3-Image for T2I & edit
-   - Otherwise: same as LTX/Wan (Krea 2 Turbo / FLUX 3 Klein)
+   - If IMG-GATE-01 & IMG-GATE-02 both pass: [MiniMax-H3-Image](https://huggingface.co/MiniMaxAI/MiniMax-H3-Image) for T2I & edit
+   - Otherwise: same as LTX/Wan ([Krea 2 Turbo](https://huggingface.co/krea/Krea-2-Turbo) / [FLUX 3 Klein](https://huggingface.co/black-forest-labs/flux-3-image-klein))
 
 3. **UI must show which default is live:**
    ```
@@ -1063,7 +1083,7 @@ For complete integration plan, see `/workspace/PRD/MovieMaker_Integration_Map.md
 
 ### License Acknowledgement Flow
 
-**Before enabling gated model (Krea 2, FLUX 3 Klein, MiniMax-H3-Image):**
+**Before enabling gated model ([Krea 2](https://huggingface.co/krea/Krea-2-Turbo), [FLUX 3 Klein](https://huggingface.co/black-forest-labs/flux-3-image-klein), [MiniMax-H3-Image](https://huggingface.co/MiniMaxAI/MiniMax-H3-Image)):**
 
 ```
 ┌────────────────────────────────────────┐
@@ -1295,7 +1315,7 @@ graph TD
 
 **v1.3 UI/UX Summary:**
 - Keyframe model picker shows live defaults with badges (⚡ T2I, ✏️ Edit, 🔒 License, ⚠ VRAM)
-- License acknowledgement modals for gated models (Krea 2, FLUX 3 Klein, MiniMax-H3-Image)
+- License acknowledgement modals for gated models ([Krea 2](https://huggingface.co/krea/Krea-2-Turbo), [FLUX 3 Klein](https://huggingface.co/black-forest-labs/flux-3-image-klein), [MiniMax-H3-Image](https://huggingface.co/MiniMaxAI/MiniMax-H3-Image))
 - Edit-from-previous flow with multi-reference (1-10 images) and strength slider
 - Model library "Image Models" tab with gate status indicators
 - Default resolution flow per profile (H3 vs LTX/Wan)

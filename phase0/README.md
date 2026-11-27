@@ -1,0 +1,378 @@
+# Phase 0 GPU Test Kit — RTX 5090 32 GB
+
+**Purpose:** Measure VRAM fit, load times, and performance for Movie Maker models on your local RTX 5090 PC.
+
+**Hardware target:**
+- Windows 11 PC, RTX 5090 32 GB (sm_120)
+- Intel Core Ultra 9 285K
+- CUDA 12.8+
+- WSL Ubuntu-22.04 (optional, for Linux test path)
+- Model storage: `D:\AIModels\` (Windows) or `~/AIModels/` (WSL)
+
+**Output:** JSON results in `phase0/results/*.json` that the coding agent will read to populate `ModelRegistry.fits_target_vram` and other flags.
+
+---
+
+## Quick Start (Choose Your Platform)
+
+### Option A: Native Windows (PowerShell)
+
+```powershell
+# 1. Create isolated Python environment
+cd phase0
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+
+# 2. Install dependencies
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+pip install "diffusers>=0.43" transformers accelerate safetensors omegaconf
+pip install redis psutil
+
+# 3. Check environment
+python env_check.py --model-root D:\AIModels
+
+# 4. Run all tests (downloads missing weights, skips what's unavailable)
+.\run_all.ps1 -ModelRoot "D:\AIModels"
+```
+
+### Option B: WSL Ubuntu-22.04
+
+```bash
+# 1. Create isolated Python environment
+cd phase0
+python3 -m venv .venv
+source .venv/bin/activate
+
+# 2. Install dependencies
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+pip install "diffusers>=0.43" transformers accelerate safetensors omegaconf
+pip install redis psutil
+
+# 3. Check environment
+python env_check.py --model-root ~/AIModels
+
+# 4. Run all tests
+./run_all.sh --model-root ~/AIModels
+```
+
+---
+
+## Expected Runtime
+
+| Test | Models | Time (estimate) | VRAM Peak |
+|------|--------|----------------|-----------|
+| env_check.py | (none) | 10 seconds | <1 GB |
+| vram_fit.py | video families, image models, Ref2VA gate, IC-LoRA gate, Bernini gate | 30-60 minutes | 10-30 GB per model |
+| converter_check.py | H3 (stub) | 5 minutes | TBD |
+
+**Total:** ~45 minutes if all weights are pre-downloaded, 2-4 hours including downloads.
+
+---
+
+## Model Links
+
+Quick reference to all Hugging Face model pages:
+
+| Model | Hugging Face Link | Gated? | License |
+|-------|-------------------|--------|---------|
+| **MiniMax H3** | [MiniMaxAI/MiniMax-H3](https://huggingface.co/MiniMaxAI/MiniMax-H3) | No | MiniMax Community License |
+| **LTX-2.5** | [Lightricks/LTX-2.5](https://huggingface.co/Lightricks/LTX-2.5) | Yes | other (requires acceptance) |
+| **Wan 2.2 I2V** | [Wan-AI/Wan2.2-I2V-A14B](https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B) | No | Apache-2.0 |
+| **Wan Animate 2** | [Wan-AI/Wan2.2-Animate-14B](https://huggingface.co/Wan-AI/Wan2.2-Animate-14B) | No | Apache-2.0 |
+| **Bernini-R** | [ByteDance/Bernini-R-Diffusers](https://huggingface.co/ByteDance/Bernini-R-Diffusers) | No | Apache-2.0 |
+| **LTX-2.5 IC-LoRA Ingredients** | [Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients) | Yes | other (same gate as LTX-2.5) |
+| **LTX-2.5 IC-LoRA Restore** | [Lightricks/LTX-2.5-22b-IC-LoRA-Restore](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Restore) | Yes | other (same gate as LTX-2.5) |
+| **Krea 2 Turbo** | [krea/Krea-2-Turbo](https://huggingface.co/krea/Krea-2-Turbo) | Yes | Krea 2 Community License |
+| **Krea 2 Raw** | [krea/Krea-2-Raw](https://huggingface.co/krea/Krea-2-Raw) | Yes | Krea 2 Community License |
+| **Z-Image-Turbo** | [Tongyi-MAI/Z-Image-Turbo](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) | No | Apache-2.0 |
+| **FLUX 3 Image Klein** | [black-forest-labs/flux-3-image-klein](https://huggingface.co/black-forest-labs/flux-3-image-klein) | Yes | FLUX Kommunity License |
+| **MiniMax-H3-Image** | [MiniMaxAI/MiniMax-H3-Image](https://huggingface.co/MiniMaxAI/MiniMax-H3-Image) | No | MiniMax-H3-Image Community License |
+
+---
+
+## What Gets Tested
+
+### Video Models (3 families)
+
+1. **MiniMax H3** (`minimax_h3`)
+   - Hugging Face: `MiniMaxAI/MiniMax-H3`
+   - Test: Load DiT + text encoder + VAE, render 22-frame 1024×576 test clip
+   - Also test: H3 + 1 LoRA loaded
+   - Precision: FP8 (torchao) or NVFP4 (ModelOpt) if `sm_120` supports; else BF16
+
+2. **LTX-2.5** (`ltx_2_5`)
+   - Hugging Face: [`Lightricks/LTX-2.5`](https://huggingface.co/Lightricks/LTX-2.5) (gated: requires license acceptance)
+   - Test: Load via `LTX2Pipeline` or `LTX25AutoBlocks`, render 24-frame 768×512 clip
+   - Precision: FP8 or BF16
+
+3. **Wan 2.2 + Wan Animate 2 + Bernini-R** (`wan_bernini`)
+   - Hugging Face: [`Wan-AI/Wan2.2-I2V-A14B`](https://huggingface.co/Wan-AI/Wan2.2-I2V-A14B) (image-to-video, 14B), [`Wan-AI/Wan2.2-T2V-A14B-Diffusers`](https://huggingface.co/Wan-AI/Wan2.2-T2V-A14B-Diffusers) (text-to-video), [`Wan-AI/Wan2.2-Animate-14B`](https://huggingface.co/Wan-AI/Wan2.2-Animate-14B) (video-to-video, Wan Animate 2), [`ByteDance/Bernini-R-Diffusers`](https://huggingface.co/ByteDance/Bernini-R-Diffusers) (editing/reference, r2v/rv2v)
+   - Test: Load base Wan, render 16-frame 512×512 clip; Bernini-R requires ByteDance inference code (not stock Diffusers pipeline class)
+   - Precision: BF16 or FP8
+   - License: Apache-2.0 (not gated)
+   - Bernini-R load: separate venv, `pip install "diffusers==0.35.2"`. Do not install that pin into the app environment (`"diffusers>=0.40"`).
+
+### Routing gates (internal tools, not extra families)
+
+4. **H3 Ref2VA** (`h3_ref2va`)
+   - Same weights as [MiniMaxAI/MiniMax-H3](https://huggingface.co/MiniMaxAI/MiniMax-H3), partition `transformer_ref`
+   - No extra download
+   - Passes only if this script finds a Diffusers class that loads that partition
+   - Otherwise status is `pipeline_unavailable` or `missing_weights`. The SGLang alternative is `--model-variant ref2va` in the H3 venv; this script does not start that server
+   - Open release excludes Context-IR and Regenerate-2K
+
+5. **LTX IC-LoRA load** (`ltx_ic_lora`)
+   - Collection: [LTX-2.5 Creative Lab](https://huggingface.co/collections/Lightricks/ltx-25-creative-lab) (15 repos, all HF-gated)
+   - This entry loads two representatives on the base pipeline: Ingredients (consistency) and Restore (restore/refine)
+   - Lightricks documents these for ComfyUI. A ComfyUI load is not a pass. If Diffusers rejects them, status is `pipeline_unavailable` and the product uses the fallback
+
+### Image Models (4 shipped defaults)
+
+6. **Krea 2 Turbo** (`krea_2_turbo`)
+   - Hugging Face: [`krea/Krea-2-Turbo`](https://huggingface.co/krea/Krea-2-Turbo) (gated: requires license acceptance)
+   - Test: Load via `Krea2Pipeline`, render 1024×1024 still (8 steps, CFG off)
+   - Also: [`krea/Krea-2-Raw`](https://huggingface.co/krea/Krea-2-Raw) (gated: for LoRA training)
+
+7. **Z-Image-Turbo** (`z_image_turbo`)
+   - Hugging Face: [`Tongyi-MAI/Z-Image-Turbo`](https://huggingface.co/Tongyi-MAI/Z-Image-Turbo) (not gated, Apache-2.0)
+   - Test: Load via `ZImagePipeline`, render 1024×1024 still (9 steps)
+
+8. **FLUX 3 Image Klein** (`flux_3_image_klein`)
+   - Hugging Face: [`black-forest-labs/flux-3-image-klein`](https://huggingface.co/black-forest-labs/flux-3-image-klein) (gated: requires license acceptance)
+   - Test: Load via `Flux3DistilledModularPipeline`, render 1024×1024 still (16 steps)
+   - **Also test:** With 9B prompt upsampler offloaded (measure separately)
+
+9. **MiniMax-H3-Image** (`minimax_h3_image`)
+   - Hugging Face: [`MiniMaxAI/MiniMax-H3-Image`](https://huggingface.co/MiniMaxAI/MiniMax-H3-Image) (not gated, MiniMax-H3-Image Community License)
+   - Test: Load via `MiniMaxH3ImageModularPipeline`, render 16:9 still (try 1920×1080 first)
+   - **Gate:** Official BF16 + full text encoder won't fit; test community quantization if available
+
+---
+
+## Model Download (Pre-Test)
+
+**All models require Hugging Face CLI:**
+```bash
+pip install "huggingface-hub[cli]"
+huggingface-cli login  # Paste your HF token (required for gated models)
+```
+
+**Accept licenses for gated models** (visit these URLs and click "Accept"):
+- [krea/Krea-2-Turbo](https://huggingface.co/krea/Krea-2-Turbo) and [krea/Krea-2-Raw](https://huggingface.co/krea/Krea-2-Raw)
+- [black-forest-labs/flux-3-image-klein](https://huggingface.co/black-forest-labs/flux-3-image-klein)
+- [Lightricks/LTX-2.5](https://huggingface.co/Lightricks/LTX-2.5)
+- [Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients) and [Lightricks/LTX-2.5-22b-IC-LoRA-Restore](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Restore) (and the rest of the [Creative Lab](https://huggingface.co/collections/Lightricks/ltx-25-creative-lab) collection if you download more than the two representatives)
+
+### Windows (PowerShell) Downloads
+
+```powershell
+# Video models
+huggingface-cli download MiniMaxAI/MiniMax-H3 --local-dir D:\AIModels\MiniMax-H3
+huggingface-cli download Lightricks/LTX-2.5 --local-dir D:\AIModels\LTX-2.5
+huggingface-cli download Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients --local-dir D:\AIModels\LTX-2.5-22b-IC-LoRA-Ingredients
+huggingface-cli download Lightricks/LTX-2.5-22b-IC-LoRA-Restore --local-dir D:\AIModels\LTX-2.5-22b-IC-LoRA-Restore
+huggingface-cli download Wan-AI/Wan2.2-I2V-A14B --local-dir D:\AIModels\Wan2.2-I2V-A14B
+huggingface-cli download Wan-AI/Wan2.2-T2V-A14B-Diffusers --local-dir D:\AIModels\Wan2.2-T2V-A14B-Diffusers
+huggingface-cli download Wan-AI/Wan2.2-Animate-14B --local-dir D:\AIModels\Wan2.2-Animate-14B
+huggingface-cli download ByteDance/Bernini-R-Diffusers --local-dir D:\AIModels\Bernini-R-Diffusers
+
+# Image models
+huggingface-cli download krea/Krea-2-Turbo --local-dir D:\AIModels\Krea-2-Turbo
+huggingface-cli download krea/Krea-2-Raw --local-dir D:\AIModels\Krea-2-Raw
+huggingface-cli download Tongyi-MAI/Z-Image-Turbo --local-dir D:\AIModels\Z-Image-Turbo
+huggingface-cli download black-forest-labs/flux-3-image-klein --local-dir D:\AIModels\flux-3-image-klein
+huggingface-cli download MiniMaxAI/MiniMax-H3-Image --local-dir D:\AIModels\MiniMax-H3-Image
+```
+
+### WSL Ubuntu Downloads
+
+```bash
+# Video models
+huggingface-cli download MiniMaxAI/MiniMax-H3 --local-dir ~/AIModels/MiniMax-H3
+huggingface-cli download Lightricks/LTX-2.5 --local-dir ~/AIModels/LTX-2.5
+huggingface-cli download Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients --local-dir ~/AIModels/LTX-2.5-22b-IC-LoRA-Ingredients
+huggingface-cli download Lightricks/LTX-2.5-22b-IC-LoRA-Restore --local-dir ~/AIModels/LTX-2.5-22b-IC-LoRA-Restore
+huggingface-cli download Wan-AI/Wan2.2-I2V-A14B --local-dir ~/AIModels/Wan2.2-I2V-A14B
+huggingface-cli download Wan-AI/Wan2.2-T2V-A14B-Diffusers --local-dir ~/AIModels/Wan2.2-T2V-A14B-Diffusers
+huggingface-cli download Wan-AI/Wan2.2-Animate-14B --local-dir ~/AIModels/Wan2.2-Animate-14B
+huggingface-cli download ByteDance/Bernini-R-Diffusers --local-dir ~/AIModels/Bernini-R-Diffusers
+
+# Image models
+huggingface-cli download krea/Krea-2-Turbo --local-dir ~/AIModels/Krea-2-Turbo
+huggingface-cli download krea/Krea-2-Raw --local-dir ~/AIModels/Krea-2-Raw
+huggingface-cli download Tongyi-MAI/Z-Image-Turbo --local-dir ~/AIModels/Z-Image-Turbo
+huggingface-cli download black-forest-labs/flux-3-image-klein --local-dir ~/AIModels/flux-3-image-klein
+huggingface-cli download MiniMaxAI/MiniMax-H3-Image --local-dir ~/AIModels/MiniMax-H3-Image
+```
+
+**Note:** `vram_fit.py --download` will attempt downloads if `--model-root` is set and weights are missing.
+
+---
+
+## Results Output
+
+Each test produces:
+- `phase0/results/<model_key>.json` — Structured results (see `schema.json`)
+- `phase0/results/samples/<model_key>_sample.png` or `.mp4` — Visual output (gitignored)
+
+**Example `minimax_h3.json`:**
+```json
+{
+  "model_key": "minimax_h3",
+  "test_date": "2026-11-27T20:30:00Z",
+  "hardware": {
+    "gpu": "NVIDIA GeForce RTX 5090",
+    "vram_total_gb": 32,
+    "cuda_version": "12.8",
+    "compute_capability": "sm_120"
+  },
+  "precision": "fp8",
+  "vram_fit": true,
+  "peak_vram_gb": 28.3,
+  "load_time_sec": 45.2,
+  "inference_time_sec": 12.1,
+  "it_per_sec": 1.82,
+  "output_resolution": "1024x576x22",
+  "status": "pass",
+  "errors": [],
+  "notes": "With 1 LoRA loaded (character adapter, 150 MB)"
+}
+```
+
+**When a model fails or is missing:**
+```json
+{
+  "model_key": "wan_bernini",
+  "status": "missing_weights",
+  "vram_fit": false,
+  "errors": ["Weights not found at D:\\AIModels\\Wan-2.2"]
+}
+```
+
+---
+
+## Submitting Results
+
+After tests complete:
+
+```bash
+# Verify results exist
+ls phase0/results/*.json
+
+# Commit results (samples are gitignored)
+git add phase0/results/*.json
+git commit -m "phase0: RTX 5090 VRAM fit results"
+git push origin <your-branch>
+```
+
+**Or paste JSON into a PR comment** if you prefer not to commit.
+
+The coding agent will read these results and populate:
+- `ModelRegistry.fits_target_vram` (true if `peak_vram_gb < 32 * 0.9`)
+- `ModelRegistry.peak_vram_gb`
+- `ModelRegistry.load_time_sec`
+- `ModelRegistry.is_active` (true if status=pass)
+- `status: "gated_no_access"` is not a VRAM result. Leave the model pending until the license is accepted and the test is re-run
+
+---
+
+## Troubleshooting
+
+### "CUDA out of memory"
+- Close other GPU applications
+- Try lower precision (FP8 instead of BF16)
+- Reduce test resolution in `vram_fit.py --resolution`
+
+### "Weights not found"
+- Check `--model-root` path
+- Run `huggingface-cli download <model>` manually
+- Or use `vram_fit.py --download` to auto-fetch
+
+### "Redis connection failed" (env_check.py)
+- Not required for Phase 0 GPU tests
+- Redis is only needed for the full app (Celery queues)
+
+### Gated model access denied (401/403)
+
+Hugging Face returns 401, 403, or `GatedRepoError` when the account running the download has not accepted that repo's license. The same steps cover every gated repo in this kit. `vram_fit.py` writes `status: "gated_no_access"` with `repo_id` set to the repo that refused access. That status is not `missing_weights` and not `fail_vram`. It does not record `vram_fit`.
+
+1. Log in with the owner's Hugging Face account (do not paste the token into chat, a commit, or a log):
+   ```bash
+   hf auth login
+   ```
+   `huggingface-cli login` is the same step on older hubs.
+2. Open each repo below and click Accept on the license. A repo you have not accepted will keep returning 401/403.
+3. Retry the test. A later `pass` or `fail_vram` is the first VRAM result.
+
+Gated repos (Hugging Face API `gated: auto`, checked 2026-11-27):
+
+- [Lightricks/LTX-2.5](https://huggingface.co/Lightricks/LTX-2.5)
+- [Lightricks/LTX-2.5-22b-IC-LoRA-Day-To-Night](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Day-To-Night)
+- [Lightricks/LTX-2.5-22b-IC-LoRA-Clean-Plate](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Clean-Plate)
+- [Lightricks/LTX-2.5-22b-IC-LoRA-Water-Simulation](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Water-Simulation)
+- [Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Pixel-Spatial-Upscaler)
+- [Lightricks/LTX-2.5-22b-IC-LoRA-Deblur](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Deblur)
+- [Lightricks/LTX-2.5-22b-IC-LoRA-Decompression](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Decompression)
+- [Lightricks/LTX-2.5-22b-IC-LoRA-Colorization](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Colorization)
+- [Lightricks/LTX-2.5-22b-LoRA-Cinemagraph](https://huggingface.co/Lightricks/LTX-2.5-22b-LoRA-Cinemagraph)
+- [Lightricks/LTX-2.5-22b-LoRA-Slow-Motion-Control](https://huggingface.co/Lightricks/LTX-2.5-22b-LoRA-Slow-Motion-Control)
+- [Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Ingredients)
+- [Lightricks/LTX-2.5-22b-IC-LoRA-SDR-To-HDR](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-SDR-To-HDR)
+- [Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Layout-To-Render)
+- [Lightricks/LTX-2.5-22b-IC-LoRA-Refine-Details](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Refine-Details)
+- [Lightricks/LTX-2.5-22b-IC-LoRA-Restore](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Restore)
+- [Lightricks/LTX-2.5-22b-IC-LoRA-Alpha-Gen](https://huggingface.co/Lightricks/LTX-2.5-22b-IC-LoRA-Alpha-Gen)
+- [krea/Krea-2-Turbo](https://huggingface.co/krea/Krea-2-Turbo)
+- [krea/Krea-2-Raw](https://huggingface.co/krea/Krea-2-Raw)
+- [black-forest-labs/flux-3-image-klein](https://huggingface.co/black-forest-labs/flux-3-image-klein)
+
+The other repos this kit downloads (MiniMax H3, MiniMax-H3-Image, Wan 2.2 I2V, Wan 2.2 T2V, Wan Animate 2, Bernini-R, Bernini-R-Diffusers, Z-Image-Turbo) returned `gated: false` on that check.
+
+### SGLang installation issues
+- SGLang is **optional** for Phase 0
+- Video tests use Diffusers pipelines by default
+- If SGLang fails to install, skip it (`--no-sglang`)
+
+---
+
+## Safety Notes
+
+- **10% VRAM margin:** Models must stay under 28.8 GB peak to pass (32 GB * 0.9)
+- **Test clips are SHORT:** 16-24 frames, low resolution (512p-1080p)
+- **Full production renders** will be longer and may hit VRAM ceilings not caught here
+- **Always monitor:** Use `nvidia-smi` or Task Manager GPU view during tests
+
+---
+
+## Questions?
+
+If a test fails or you encounter hardware/driver issues:
+- Capture the full error output
+- Include `nvidia-smi` output
+- Note your CUDA/driver versions
+- Report in the PR or issue tracker
+
+The coding agent will adapt the registry seed based on your actual results, so **accurate measurements matter**.
+
+---
+
+**Start command (Windows):**
+```powershell
+cd phase0
+python -m venv .venv
+.\.venv\Scripts\Activate.ps1
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+pip install "diffusers>=0.43" transformers accelerate safetensors redis psutil
+python env_check.py --model-root D:\AIModels
+.\run_all.ps1 -ModelRoot "D:\AIModels"
+```
+
+**Start command (WSL Ubuntu):**
+```bash
+cd phase0
+python3 -m venv .venv && source .venv/bin/activate
+pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu128
+pip install "diffusers>=0.43" transformers accelerate safetensors redis psutil
+python env_check.py --model-root ~/AIModels
+./run_all.sh --model-root ~/AIModels
+```
